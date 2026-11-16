@@ -134,6 +134,58 @@ Every expected value in the merged-config check was re-derived from the fragment
 that actually supplies it and then verified with `scripts/check-merged-config.py`
 against a config assembled from the real fragments: 16 values match.
 
+### First CI runs on GitHub Actions (2026-11-16)
+
+The repository is pushed to a private remote and its workflow has run. Four of the
+five jobs pass; the fifth is the kernel build, which is the slow one.
+
+| Job | Result |
+| --- | --- |
+| `Validate configuration` | **passes** |
+| `Compile the board device trees` | **passes** |
+| `Resolve the build tree` | **passes** |
+| `Non-destructive install path` | **passes** |
+| `Porting record` (separate workflow) | **passes** |
+| `Build the kernel` | runs; it rebuilds clang from source before it can compile |
+
+`Resolve the build tree` passing is the milestone this migration was aiming at.
+That job installs the OS profile, fetches every pinned source, merges the four
+configuration fragments into a `.config`, assembles the build tree out of
+symlinks and then asserts: the 16 expected switches, the two archives on the
+link line, the 72-entry patch order with no iOS 16 rebase in it, and the source
+pins. It exercises the arm64e profile, the SoC series and the OS series together
+for the first time on a machine that is not this one.
+
+**Six defects were found by running it**, none reachable by reading the files:
+
+1. `porting.toml` referenced `configs/nx769j_defconfig` as display evidence after
+   the defconfig was renamed. CI runs the record checker with `--base`, so it
+   validates every area reference on each push.
+2. The device-tree job asserted `compatible = "arm,cortex-*"`, but the stock
+   myron DTB uses `compatible = "arm,armv8"`. The count was 0 and `bash -e`
+   turned `grep -c` exit 1 into a step failure, after both trees had compiled.
+3. The patch-order step read `status.json` from the repository root while the
+   step that writes it sets `working-directory: UniXNU`. Every step is its own
+   shell.
+4. `find out -name .config` matched a **directory** of that name inside the
+   cached edk2 checkout (`out/feeds/mu_basecore-*/.config`), so the merged-config
+   check failed with `IsADirectoryError`. Both consumers now search `out/myron`
+   and require `-type f`.
+5. `unixnu.lock` was edited by hand to move one entry. Eight others were stale
+   and two components were missing. It is fetch output; all 20 entries are now
+   regenerated from `components.toml`.
+6. The changed-area rule rejected each `.github/**` and `unixnu.lock` change
+   until a finding was recorded, which is the rule working as intended.
+
+Two of these were also worth correcting in the docs rather than only in code:
+the arch series has **69** entries, not 68, and the SoC series lives at
+`patches/xnu/series` in `UniXNU-sm8550-common`, not `patches/xnu-12377/`.
+
+A separate failure was not a code defect: for several runs `actions/checkout`
+reported `Repository not found` for this private repository while
+`gh api` could read it fine, and it cleared on its own. Worth knowing when a
+private-repo workflow fails before its first step.
+
 Two defects were found by running it, both now fixed:
 
 1. **`soc:patches/xnu-12377/series` does not exist.** The pinned commit

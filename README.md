@@ -24,7 +24,16 @@ firmware and partition policy. Shared code lives in
 
 ## Status
 
-**Nothing has booted and nothing has linked XNU 12377 for this board.**
+**Nothing has booted, and nothing has linked XNU 12377 for this board.**
+
+What has been proved is that the configuration resolves: the `Build` workflow on
+GitHub Actions passes its `validate`, `device-tree`, `resolve` and
+`partition-safety` jobs, and the separate `Porting record` workflow passes.
+`resolve` installs the OS profile, fetches every pinned source, merges the four
+fragments and asserts the 16 expected switches, the link-line archives, the
+72-entry patch order and the source pins. The `Build the kernel` job runs but has
+not reported yet; it rebuilds clang from source first. See `MIGRATION.md` for the
+six defects those runs found.
 
 This repository was an iOS 16.7.16 / XNU 8796 skeleton. It was migrated to the
 arm64e iOS 26 target; [`MIGRATION.md`](MIGRATION.md) records every field that
@@ -35,7 +44,7 @@ trusting any status claim here or in `porting.toml`.
 | --- | --- |
 | Board description, partition policy, device tree | carried over from the iOS 16 work, still accurate |
 | OS profile for 23F84 / arm64e | written |
-| Patch order resolved against the shared arm64e series | **not attempted** |
+| Patch order resolved against the shared arm64e series | **done** on CI: 72 entries, no iOS 16 rebase |
 | Kernel compiles and links | **not attempted** on this target |
 | Prelink | **not attempted**; the kernelcache pin is inherited, not measured |
 | UEFI firmware volume | **built** (see below); it does not depend on the OS profile |
