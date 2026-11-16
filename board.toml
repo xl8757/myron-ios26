@@ -138,10 +138,17 @@ config_fragments = ["arch:configs/common.config", "soc:configs/sm8550.config", "
 # because every patch_series entry must be a SERIES FILE: the driver reads each
 # entry as a list of patch paths, so naming a .patch here makes it parse the
 # patch body as a series and fail.
+# The order matters for more than patch application: zzz-boot-progress.patch is
+# the last patch by name and by intent (the zzz prefix is deliberate), so the OS
+# series has to come last. Listing the device series after it put the vendored
+# SoC patch at the end instead, and CI failed with
+#   AssertionError: sheng-platform-power.patch
+# on the assertion that the final patch is zzz-boot-progress.patch. The device
+# series therefore sits before the OS series.
 patch_series = [
   "arch:patches/xnu/series",
-  "os:patches/xnu/series",
   "device:patches/xnu26/series",
+  "os:patches/xnu/series",
 ]
 
 # kernel.prelink is inherited from the selected OS profile
