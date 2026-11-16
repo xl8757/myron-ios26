@@ -2,7 +2,7 @@
   {
     "field": "kernel.prelink.kernelcache_sha256",
     "status": "OPEN",
-    "detail": "The pin is inherited from UniXNU/profiles/os/ipados-26.5.2-23F84 and has not been measured here. unixnu build kernel fails closed with 'does not match the kernelcache this board was qualified against' until it is confirmed. The pin covers the decompressed arm64 Mach-O slice only, not the whole fat IMG4 image.",
+    "detail": "The pin is inherited from UniXNU/profiles/os/ipados-26.5.2-23F84 and has not been measured here. unixnu build kernel fails closed with 'does not match the kernelcache this board was qualified against' until it is confirmed. The pin covers the decompressed arm64 Mach-O slice only, not the whole fat IMG4 image. CI reaches this point but has no image to check against, so the pin remains the first thing a real kernel build will fail on.",
     "how_to_resolve": "Fetch the 23F84 restore image (about 11 GB) and run scripts/extract-ipsw-pins.py against the extracted kernelcache; replace the value in os-profiles/ios-26.5.2-23F84/profile.toml if it differs."
   },
   {
@@ -126,7 +126,7 @@
   {
     "field": "stage.kernel",
     "status": "OPEN",
-    "detail": "Nothing has built XNU 12377 for this board. The iOS 16 kernel built and linked (run 43688728338), but that was xnu-8796 with the device-local rebase. The arm64e series has never been resolved for myron.",
-    "how_to_resolve": "Run ./unixnu build kernel against this repository once the USB dual-system partition exists, and record the first blocking failure."
+    "detail": "Configuration resolution passes in CI: the Build workflow runs validate, device-tree, resolve and partition-safety green on GitHub Actions, and resolve asserts the merged config, the link-line archives, the 72-entry patch order and the source pins. What has not happened is a compile: the Build the kernel job installs the Linux toolchain by building clang from source, which takes far longer than the other jobs, and no run has reported a result from it yet. Nothing has linked XNU 12377 for this board.",
+    "how_to_resolve": "Let the kernel job finish, or run ./unixnu build kernel on a Linux host with the toolchain from scripts/linux/setup-toolchain.py, and record the first blocking failure. The 23F84 kernelcache pin is still inherited rather than measured, so prelink is expected to be the wall after the link."
   }
 ]
