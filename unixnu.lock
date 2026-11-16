@@ -1,7 +1,10 @@
 # Resolved git sources, written by "unixnu fetch". Local sources are never recorded.
 
+[source."AppleKeyStoreState"]
+commit = "8c70daf814aafdf4a3d35e40dde0322655fd0a83"
+
 [source."ArmCpu"]
-commit = "9066b53bbc82e92a98ec44a11dd50fd13eaf1a1b"
+commit = "acba4ee2674cfb23434431feb124871ae9b3b581"
 
 [source."ArmDTPlatform"]
 commit = "417ff95d6a6e8607ddea9309ec45c3bfd4a67c60"
@@ -10,28 +13,31 @@ commit = "417ff95d6a6e8607ddea9309ec45c3bfd4a67c60"
 commit = "933f9360f1b70dfbda5548386a3d65e0358b4f7d"
 
 [source."DarwinBoot"]
-commit = "3325e352d7df68a9f9ad74832ed94a6acbbd7390"
+commit = "3c75734014cdab0acd9541e88057b7606ee7ae08"
 
 [source."GopFramebuffer"]
-commit = "cf3b42979a9c44219e7bb149543e6fc3388b58ed"
+commit = "e47c1b8de169cd2bd0b885c7d85e433010e3cdf2"
 
 [source."IOStorageFamily"]
 commit = "e45fbe30a7879e0b16e26dddb78538f1b00e0bff"
 
+[source."RamBlock"]
+commit = "00a6e5dd6bb1709e817e13daec7986308cfb6d0f"
+
 [source."ShengUfs"]
-commit = "e2b32cc429e8cf1501161c1d8c517f8994ceb9b2"
+commit = "2b6638be3e5630969e316dd1755065542fcee505"
 
 [source."SoftwareAES"]
 commit = "4a45326da5c2cd6fe6813d79ee43db20805628af"
 
 [source."VerifiedRoot"]
-commit = "def026642c6c6e71be0dea267d989df1d29ddc64"
+commit = "974f043d0c71ba2e60331483a41c6c6d35274ee3"
 
 [source."VirtioMmioBlock"]
-commit = "8ee3a5ab5a3726b0641990228346aec338246eaf"
+commit = "4e1013eb8c45077b57f8d38d61b389fe899ea1c3"
 
 [source."XnuPrelink"]
-commit = "f876e3ee62e18fc06653dd75ed7dafcfb3950ac0"
+commit = "c645d76bb0ab8c506a76840ddf93a2276d419a0e"
 
 [source."corecrypto-2023"]
 commit = "11fba65b12d8830630e248dfa8344caf8b065f26"
