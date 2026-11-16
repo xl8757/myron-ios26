@@ -1,0 +1,70 @@
+diff --git a/clang/include/clang/Basic/DiagnosticParseKinds.td b/clang/include/clang/Basic/DiagnosticParseKinds.td
+index 4ca2ed3..79eb812 100644
+--- a/clang/include/clang/Basic/DiagnosticParseKinds.td
++++ b/clang/include/clang/Basic/DiagnosticParseKinds.td
+@@ -1627,7 +1627,7 @@ def warn_pragma_unroll_cuda_value_in_parens : Warning<
+   InGroup<CudaCompat>;
+ 
+ def err_ptrauth_qualifier_bad_arg_count : Error<
+-  "'__ptrauth' qualifier must take between 1 and 3 arguments">;
++  "'__ptrauth' qualifier must take between 1 and 4 arguments">;
+ 
+ def warn_cuda_attr_lambda_position : Warning<
+   "nvcc does not allow '__%0__' to appear after the parameter list in lambdas">,
+diff --git a/clang/lib/Parse/ParseDecl.cpp b/clang/lib/Parse/ParseDecl.cpp
+index 1d3789a..216718b 100644
+--- a/clang/lib/Parse/ParseDecl.cpp
++++ b/clang/lib/Parse/ParseDecl.cpp
+@@ -3200,7 +3200,9 @@ void Parser::ParsePtrauthQualifier(ParsedAttributes &Attrs) {
+   T.consumeClose();
+   SourceLocation EndLoc = T.getCloseLocation();
+ 
+-  if (ArgExprs.empty() || ArgExprs.size() > 3) {
++  // XNU uses a fourth, string-literal argument to request null authentication
++  // ("authenticates-null-values"). Upstream clang rejects it; Apple's does not.
++  if (ArgExprs.empty() || ArgExprs.size() > 4) {
+     Diag(KwLoc, diag::err_ptrauth_qualifier_bad_arg_count);
+     return;
+   }
+diff --git a/clang/lib/Sema/SemaType.cpp b/clang/lib/Sema/SemaType.cpp
+index 9de4f12..d04fce5 100644
+--- a/clang/lib/Sema/SemaType.cpp
++++ b/clang/lib/Sema/SemaType.cpp
+@@ -8659,13 +8659,26 @@ static void HandleNeonVectorTypeAttr(QualType &CurType, const ParsedAttr &Attr,
+ static void HandlePtrAuthQualifier(ASTContext &Ctx, QualType &T,
+                                    const ParsedAttr &Attr, Sema &S) {
+ 
+-  assert((Attr.getNumArgs() > 0 && Attr.getNumArgs() <= 3) &&
+-         "__ptrauth qualifier takes between 1 and 3 arguments");
++  assert((Attr.getNumArgs() > 0 && Attr.getNumArgs() <= 4) &&
++         "__ptrauth qualifier takes between 1 and 4 arguments");
+   Expr *KeyArg = Attr.getArgAsExpr(0);
+   Expr *IsAddressDiscriminatedArg =
+       Attr.getNumArgs() >= 2 ? Attr.getArgAsExpr(1) : nullptr;
+   Expr *ExtraDiscriminatorArg =
+       Attr.getNumArgs() >= 3 ? Attr.getArgAsExpr(2) : nullptr;
++  // XNU: the optional fourth argument is a string literal that opts the
++  // pointer into authenticating null values. Upstream hardcodes false.
++  bool AuthenticatesNullValues = false;
++  if (Attr.getNumArgs() >= 4) {
++    StringLiteral *NullArg = dyn_cast<StringLiteral>(Attr.getArgAsExpr(3));
++    if (!NullArg || NullArg->getString() != "authenticates-null-values") {
++      S.Diag(Attr.getArgAsExpr(3)->getBeginLoc(),
++             diag::err_ptrauth_qualifier_bad_arg_count);
++      Attr.setInvalid();
++      return;
++    }
++    AuthenticatesNullValues = true;
++  }
+ 
+   unsigned Key;
+   if (S.checkConstantPointerAuthKey(KeyArg, Key)) {
+@@ -8710,7 +8723,7 @@ static void HandlePtrAuthQualifier(ASTContext &Ctx, QualType &T,
+   PointerAuthQualifier Qual = PointerAuthQualifier::Create(
+       Key, IsAddressDiscriminated, ExtraDiscriminator,
+       PointerAuthenticationMode::SignAndAuth, /*IsIsaPointer=*/false,
+-      /*AuthenticatesNullValues=*/false);
++      AuthenticatesNullValues);
+   T = S.Context.getPointerAuthType(T, Qual);
+ }
+ 

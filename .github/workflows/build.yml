@@ -453,6 +453,39 @@ jobs:
             libssl-dev zlib1g-dev libbsd-dev uuid-dev llvm-dev libclang-dev \
             tcsh unifdef mtools device-tree-compiler
 
+      # XNU 12377 writes OS_PTRAUTH_SIGNED_PTR_AUTH_NULL with a fourth __ptrauth
+      # argument, "authenticates-null-values". Upstream clang's parser rejects
+      # more than three arguments and Sema hardcodes the null-authentication bit
+      # to false, so compiling libdispatch against XNU's headers fails with
+      #   sys/ucred.h:164:20: error: '__ptrauth' qualifier must take between 1
+      #   and 3 arguments
+      # Apple's clang accepts it. setup-toolchain.py already applies one LLVM
+      # patch (llvm-xnu-builtin-type.patch); this drops a second patch beside it
+      # before the installer runs, so the clang it builds understands the syntax.
+      # The patch is three files and 20 lines: the parser's count check, the
+      # diagnostic text, and Sema's handler, which now validates the literal and
+      # passes the flag to PointerAuthQualifier::Create - a path that already
+      # exists upstream through CodeGen and DebugInfo.
+      - name: Teach the toolchain clang about XNU's fourth ptrauth argument
+        run: |
+          cp myron-ios26/scripts/linux/llvm-ptrauth-null-values.patch \
+             UniXNU/scripts/linux/llvm-ptrauth-null-values.patch
+          python3 - <<'PY'
+          import pathlib
+          p = pathlib.Path('UniXNU/scripts/linux/setup-toolchain.py')
+          t = p.read_text(encoding='utf-8')
+          anchor = "run(['git', '-C', src, 'apply', HERE / 'llvm-xnu-builtin-type.patch'])"
+          assert anchor in t, 'setup-toolchain.py no longer applies the builtin-type patch'
+          extra = (anchor + "\n" +
+                   "        run(['git', '-C', src, 'apply', HERE / 'llvm-ptrauth-null-values.patch'])")
+          if 'llvm-ptrauth-null-values.patch' not in t:
+              p.write_text(t.replace(anchor, extra), encoding='utf-8')
+              print('setup-toolchain.py now applies the ptrauth patch')
+          else:
+              print('ptrauth patch already wired')
+          PY
+          grep -n 'llvm-ptrauth-null-values' UniXNU/scripts/linux/setup-toolchain.py
+
       # Restore and save are separate steps. The kernel job is expected to fail
       # while this port is being brought up, and actions/cache's combined form
       # only saves on success, so without an explicit save the entry is never
@@ -480,6 +513,19 @@ jobs:
           sudo env UNIXNU_TOOLCHAIN="$TOOLCHAIN" python3 scripts/linux/setup-toolchain.py "$TOOLCHAIN"
           sudo chown -R "$(id -u):$(id -g)" "$TOOLCHAIN"
 
+      # XNU 12377 writes OS_PTRAUTH_SIGNED_PTR_AUTH_NULL with a fourth __ptrauth
+      # argument, "authenticates-null-values". Upstream clang's parser rejects
+      # more than three arguments and Sema hardcodes the null-authentication bit
+      # to false, so building libdispatch against XNU's headers fails with
+      #   sys/ucred.h:164:20: error: '__ptrauth' qualifier must take between 1
+      #   and 3 arguments
+      # Apple's clang accepts it. scripts/linux/setup-toolchain.py already
+      # applies one LLVM patch (llvm-xnu-builtin-type.patch) the same way; this
+      # drops a second patch next to it before the installer runs, so the
+      # toolchain it builds understands the syntax. The patch touches three
+      # files and 20 lines: the parser's argument-count check, the diagnostic
+      # text, and Sema's handler, which now validates the string literal and
+      # passes the flag through to PointerAuthQualifier::Create - a path that
       - name: Save the toolchain cache
         if: always() && steps.toolchain.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
