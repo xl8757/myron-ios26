@@ -186,6 +186,15 @@ reported `Repository not found` for this private repository while
 `gh api` could read it fine, and it cleared on its own. Worth knowing when a
 private-repo workflow fails before its first step.
 
+One more workflow defect turned up while watching the kernel job, and it was not
+in any assertion: the workflow inherits `concurrency: cancel-in-progress: true`
+from the board it was derived from. That is fine for the jobs that finish in a
+minute, but the kernel job builds clang from source and needs roughly forty, so
+every push during that window cancels it. Four successive pushes each killed the
+run before it reached a result, which made it look like the job never progressed.
+Watch for this before concluding that the kernel step hangs: check whether the
+previous run's kernel job says `cancelled` rather than running.
+
 Two defects were found by running it, both now fixed:
 
 1. **`soc:patches/xnu-12377/series` does not exist.** The pinned commit

@@ -328,7 +328,7 @@ jobs:
           assert names[0] == 'bcm2837-machine-config.patch', names[0]
           assert names[-1] == 'zzz-boot-progress.patch', names[-1]
           for required in ('native-pac-keys.patch', 'native-pac-arm64-user-jop.patch',
-                           'native-4k-user-abi.patch', 'native-smp-secondary.patch'):
+                           'native-4k-user-abi.patch', 'sheng-platform-power.patch'):
               assert required in names, f'{required} missing from the patch order'
           # The retired iOS 16 rebase lives in the device repository's
           # patches/xnu/ and must contribute nothing. The arm64e series comes
@@ -341,7 +341,13 @@ jobs:
           soc = [e for e in order if 'sm8550-common' in e.replace('\\', '/')]
           print(f'shared arm64e patches: {len(shared)}, SoC patches: {len(soc)}')
           assert len(shared) >= 60, f'only {len(shared)} shared patches resolved'
-          assert len(soc) == 2, f'expected 2 SoC patches, got {len(soc)}'
+          assert len(soc) == 1, f'expected 1 SoC patch, got {len(soc)}'
+          # native-smp-secondary.patch is deliberately not applied: it edits
+          # board_config.h line 134, which the arm64e BCM2837 block moves, and its
+          # MAX_CPUS 8 / MAX_CPU_CLUSTERS 1 is older and less correct than the
+          # block's 8 / 2.
+          assert 'native-smp-secondary.patch' not in names, \
+              'the superseded SoC SMP patch is back in the order'
           print('patch order is arch + soc + os; the iOS 16 rebase is not applied')
           PY
 
@@ -532,7 +538,7 @@ jobs:
           assert names[0] == 'bcm2837-machine-config.patch', names[0]
           assert names[-1] == 'zzz-boot-progress.patch', names[-1]
           for required in ('native-pac-keys.patch', 'native-pac-arm64-user-jop.patch',
-                           'native-4k-user-abi.patch', 'native-smp-secondary.patch'):
+                           'native-4k-user-abi.patch', 'sheng-platform-power.patch'):
               assert required in names, f'{required} missing from the patch order'
           # The retired iOS 16 rebase lives in patches/xnu/ and must contribute
           # nothing. Its own directory is the signature: the arm64e series comes
@@ -545,7 +551,13 @@ jobs:
           soc = [entry for entry in order if 'sm8550-common' in entry]
           print(f'shared arm64e patches: {len(shared)}, SoC patches: {len(soc)}')
           assert len(shared) >= 60, f'only {len(shared)} shared patches resolved'
-          assert len(soc) == 2, f'expected 2 SoC patches, got {len(soc)}'
+          assert len(soc) == 1, f'expected 1 SoC patch, got {len(soc)}'
+          # native-smp-secondary.patch is deliberately not applied: it edits
+          # board_config.h line 134, which the arm64e BCM2837 block moves, and its
+          # MAX_CPUS 8 / MAX_CPU_CLUSTERS 1 is older and less correct than the
+          # block's 8 / 2.
+          assert 'native-smp-secondary.patch' not in names, \
+              'the superseded SoC SMP patch is back in the order'
           print('patch order is arch + soc + os; the iOS 16 rebase is not applied')
           PY
 
@@ -573,19 +585,35 @@ jobs:
       # as a hard failure would report the expected stop as a broken build.
       # Only a stop that is NOT one of the known missing-input messages is a
       # real failure here.
+      #
+      # `if ... | tee build.log; then` tests THE EXIT STATUS OF tee, not of
+      # unixnu. On 2026-11-16 that turned a hard patch failure into a green job:
+      # native-smp-secondary.patch failed to apply, unixnu exited nonzero, tee
+      # exited 0, and the branch printed "kernel build passed". The status is
+      # now taken from PIPESTATUS on both invocations, and a patch failure is
+      # called out by name before anything else is decided.
       - name: Build the kernel
         working-directory: UniXNU
         env:
           CCACHE: python3 ${{ github.workspace }}/myron-ios26/scripts/compile-records.py
         run: |
-          if UNIXNU_TOOLCHAIN="$HOME/unixnu-linux" ./unixnu build kernel -D ../myron-ios26 2>&1 | tee build.log; then
+          set -o pipefail
+          UNIXNU_TOOLCHAIN="$HOME/unixnu-linux" ./unixnu build kernel -D ../myron-ios26 2>&1 | tee build.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -eq 0 ]; then
             echo "kernel build passed"
             exit 0
           fi
-          echo "::warning::parallel build failed; repeating serially for a readable diagnostic"
+          echo "::warning::parallel build failed (status $status); repeating serially for a readable diagnostic"
           rm -rf out/myron/*/myron_ios26/logs
           UNIXNU_TOOLCHAIN="$HOME/unixnu-linux" ./unixnu build kernel -j 1 -D ../myron-ios26 2>&1 | tee build.log
           status=${PIPESTATUS[0]}
+
+          # A patch that does not apply is never the expected boundary.
+          if grep -qE 'patch does not apply|git failed \(1\)|patch failed:' build.log; then
+            echo '::error::a patch in the resolved order does not apply; see the patch lines above'
+            exit 1
+          fi
 
           missing_input='IPSW not found|kernelcache not found|does not match the kernelcache|UNIXNU_IPSW|restore image'
 

@@ -113,7 +113,35 @@ config_fragments = ["arch:configs/common.config", "soc:configs/sm8550.config", "
 # this order. It is 65 hunks hand-rebased onto xnu-8796 because no shared series
 # existed for that tag; against xnu-12377 the arm64e series above already
 # carries the same changes, and applying both applies them twice.
-patch_series = ["arch:patches/xnu/series", "soc:patches/xnu/series", "os:patches/xnu/series", "device:patches/xnu26/series"]
+#
+# THE SOC SERIES IS NOT USED AS A WHOLE. UniXNU-sm8550-common's
+# patches/xnu/series holds two patches, and the first of them does not apply
+# here: native-smp-secondary.patch edits MAX_CPUS in
+# pexpert/pexpert/arm64/board_config.h at line 134, but
+# bcm2837-machine-config.patch — the first patch of the arm64e arch series —
+# inserts a whole ARM64_BOARD_CONFIG_BCM2837 block into that same file at line
+# 304, which moves the context the SoC patch expects. CI failed on exactly this
+# on 2026-11-16:
+#   error: patch failed: pexpert/pexpert/arm64/board_config.h:134
+#   error: pexpert/pexpert/arm64/board_config.h: patch does not apply
+# It is not needed either. The SoC patch raises MAX_CPUS from 4 to 8 and leaves
+# MAX_CPU_CLUSTERS at 1; the arch block already sets MAX_CPUS 8 and
+# MAX_CPU_CLUSTERS 2, which is what SM8850 actually has (two clusters). The arch
+# value is both newer and more correct, so the SoC patch is dropped rather than
+# rebased.
+#
+# The second SoC patch, sheng-platform-power.patch, is kept: it only calls
+# sheng_pmgr_run() under `#if defined(XNU_SHENG_PMGR) && XNU_SHENG_PMGR`, and
+# this board sets CONFIG_XNU_SHENG_PMGR=n, so it compiles to nothing. It is
+# carried so that turning that switch on later does not also require editing the
+# patch order. Referenced by path, not by the soc: prefix, so that a future
+# change to the SoC repository cannot silently pull native-smp-secondary back in.
+patch_series = [
+  "arch:patches/xnu/series",
+  "soc:patches/xnu/sheng-platform-power.patch",
+  "os:patches/xnu/series",
+  "device:patches/xnu26/series",
+]
 
 # kernel.prelink is inherited from the selected OS profile
 # (os-profiles/ios-26.5.2-23F84/profile.toml): tool, kernel path,
