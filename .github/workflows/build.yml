@@ -337,18 +337,20 @@ jobs:
                      if pathlib.Path(entry).parent.name == 'xnu'
                      and 'sm8550-common' not in entry.replace('\\', '/')]
           assert not retired, f'the iOS 16 series is being applied: {retired}'
-          shared = [e for e in order if 'patches/xnu-12377' in e.replace('\\', '/')]
-          soc = [e for e in order if 'sm8550-common' in e.replace('\\', '/')]
+          shared = [e for e in order if 'patches/xnu-12377' in e.replace(chr(92), '/')]
+          soc = [e for e in order if 'sm8550-common' in e.replace(chr(92), '/')]
           print(f'shared arm64e patches: {len(shared)}, SoC patches: {len(soc)}')
-          assert len(shared) >= 60, f'only {len(shared)} shared patches resolved'
+          # 69 arch + 1 os + 1 SoC, the SoC one arriving through the device series.
+          assert len(shared) >= 68, f'only {len(shared)} shared patches resolved'
           assert len(soc) == 1, f'expected 1 SoC patch, got {len(soc)}'
+          assert 'sheng-platform-power.patch' in names, 'the kept SoC patch is missing'
           # native-smp-secondary.patch is deliberately not applied: it edits
           # board_config.h line 134, which the arm64e BCM2837 block moves, and its
           # MAX_CPUS 8 / MAX_CPU_CLUSTERS 1 is older and less correct than the
           # block's 8 / 2.
           assert 'native-smp-secondary.patch' not in names, \
               'the superseded SoC SMP patch is back in the order'
-          print('patch order is arch + soc + os; the iOS 16 rebase is not applied')
+          print('patch order is arch + os + one SoC patch; the iOS 16 rebase is not applied')
           PY
 
       - name: Check the recorded source pins
@@ -550,15 +552,17 @@ jobs:
           shared = [entry for entry in order if 'patches/xnu-12377' in entry]
           soc = [entry for entry in order if 'sm8550-common' in entry]
           print(f'shared arm64e patches: {len(shared)}, SoC patches: {len(soc)}')
-          assert len(shared) >= 60, f'only {len(shared)} shared patches resolved'
+          # 69 arch + 1 os + 1 SoC, the SoC one arriving through the device series.
+          assert len(shared) >= 68, f'only {len(shared)} shared patches resolved'
           assert len(soc) == 1, f'expected 1 SoC patch, got {len(soc)}'
+          assert 'sheng-platform-power.patch' in names, 'the kept SoC patch is missing'
           # native-smp-secondary.patch is deliberately not applied: it edits
           # board_config.h line 134, which the arm64e BCM2837 block moves, and its
           # MAX_CPUS 8 / MAX_CPU_CLUSTERS 1 is older and less correct than the
           # block's 8 / 2.
           assert 'native-smp-secondary.patch' not in names, \
               'the superseded SoC SMP patch is back in the order'
-          print('patch order is arch + soc + os; the iOS 16 rebase is not applied')
+          print('patch order is arch + os + one SoC patch; the iOS 16 rebase is not applied')
           PY
 
       # Parallel make interleaves its output so heavily that the diagnostic for

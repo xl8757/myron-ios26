@@ -134,11 +134,12 @@ config_fragments = ["arch:configs/common.config", "soc:configs/sm8550.config", "
 # sheng_pmgr_run() under `#if defined(XNU_SHENG_PMGR) && XNU_SHENG_PMGR`, and
 # this board sets CONFIG_XNU_SHENG_PMGR=n, so it compiles to nothing. It is
 # carried so that turning that switch on later does not also require editing the
-# patch order. Referenced by path, not by the soc: prefix, so that a future
-# change to the SoC repository cannot silently pull native-smp-secondary back in.
+# patch order. It is listed in patches/xnu26/series rather than named here,
+# because every patch_series entry must be a SERIES FILE: the driver reads each
+# entry as a list of patch paths, so naming a .patch here makes it parse the
+# patch body as a series and fail.
 patch_series = [
   "arch:patches/xnu/series",
-  "soc:patches/xnu/sheng-platform-power.patch",
   "os:patches/xnu/series",
   "device:patches/xnu26/series",
 ]
