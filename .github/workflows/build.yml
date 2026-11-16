@@ -554,6 +554,38 @@ jobs:
           restore-keys: |
             xnu12377-sources-
 
+      # The archive builders replay per-object compile recipes out of the XNU
+      # build. build-arm-driver.py filters every -W flag out of the replayed
+      # command and then appends its own strict set, ending in -Werror, so the
+      # driver sources are compiled strictly regardless of the kernel's own
+      # BUILD_WERROR=0.
+      #
+      # The replayed recipe carries -mios-version-min=26.0 while the script also
+      # passes --target=arm64e-apple-ios17.0.0. The clang this job builds treats
+      # that override as a warning, and -Werror turns it into a hard error:
+      #   clang-24: error: overriding '-mios-version-min=26.0' option with
+      #   '--target=arm64e-apple-ios17.0.0' [-Werror,-Woverriding-option]
+      # The kernel build itself hits the same diagnostic 1156 times and keeps
+      # going, because BUILD_WERROR is 0 there. Only this one warning is
+      # downgraded; every other -Werror check on the driver sources stands.
+      - name: Let the archive replay tolerate the target-version override
+        run: |
+          python3 - <<'PY'
+          import pathlib
+          p = pathlib.Path('UniXNU/scripts/build-arm-driver.py')
+          t = p.read_text(encoding='utf-8')
+          old = "command.extend(['-Wall', '-Wextra', '-Werror', '-Wno-unused-parameter',"
+          new = ("command.extend(['-Wall', '-Wextra', '-Werror', "
+                 "'-Wno-error=overriding-option', '-Wno-unused-parameter',")
+          if '-Wno-error=overriding-option' in t:
+              print('already patched')
+          else:
+              assert old in t, 'build-arm-driver.py warning list changed'
+              p.write_text(t.replace(old, new), encoding='utf-8')
+              print('downgraded overriding-option for the archive replay')
+          PY
+          grep -n 'Wno-error=overriding-option' UniXNU/scripts/build-arm-driver.py
+
       - name: Fetch, configure and assemble
         working-directory: UniXNU
         run: |
