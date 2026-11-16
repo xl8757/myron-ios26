@@ -147,7 +147,7 @@ windows = [{ name = "OS", component = "OS" }, { name = "SystemOS", component = "
 os_volume_uuid = "546DFF4A-4172-4026-9F1B-7FDAD45F3D2E"
 os_image_sha256 = "b4e40913f9908f6b68e554bd79b4b95362cade0c3ce210dc378a151bc3387716"
 systemos_volume_uuid = "7A23BAC7-E86D-4DF4-B181-E6D80F212AE5"
-systemos_image_sha256 = "eadb838d10f05ff2404b6d6cbc4012e9367c90e916f0283ed6a19bd7ac8753daf"
+systemos_image_sha256 = "eadb838d10f05ff2404b6d6cbc4012e9376c90e16f0283ed6a19bd7ac8753daf"
 
 [payload.adt]
 # The APFS volume UUID inside the OS window, which the UFS block class publishes
