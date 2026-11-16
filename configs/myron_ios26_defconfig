@@ -1,4 +1,4 @@
-# myron / iOS 26.5.2 (23F84, XNU 12377, arm64e) kernel configuration (skeleton).
+# myron / iOS 26.5.2 (23F84, XNU 12377, arm64e) kernel configuration.
 # PENDING: not yet qualified against a 23F84 kernelcache. See MIGRATION.md.
 #
 # CONFIG_XNU_<NAME> becomes XNU_<NAME> for the kernel build script: y and n are 1
@@ -7,47 +7,34 @@
 # Configuration fragments apply first in this order:
 #   arch:configs/common.config  soc:configs/sm8550.config  os:configs/ios.config
 # and this file is applied last, so a value set here replaces the inherited one.
+# The merge CONCATENATES; it does not deduplicate, and parse_config takes the
+# last value for a name. A switch repeated below therefore overrides a fragment
+# on purpose, and the duplication in the generated .config is expected.
 #
-# What changed from myron_ios16_defconfig, and why:
-#
-#   - CONFIG_XNU_NATIVE_PAC does not exist in the arm64e arch fragment, despite
-#     what an earlier draft of this comment claimed. arm64e's common.config sets
-#     only: BUILD_ARCHIVES, SOURCE_CORECRYPTO14, SOURCE_PTHREAD,
-#     ARM_DT_PLATFORM, ARMCPU, NATIVE_ARCH_TIMER, NATIVE_PAN. Pointer
-#     authentication comes in through patches/xnu-12377/native-pac-keys.patch and
-#     native-pac-arm64-user-jop.patch, which are unconditional, not through a
-#     CONFIG_ switch. Nothing needs to be set here for PAC, and there is no
-#     switch to set.
-#   - CONFIG_XNU_KERNEL_CHAINED_FIXUPS=y is added. It is present in
-#     sheng_ipados26_defconfig for the same 23F84 profile and is what lets the
-#     iOS 26 prelinked kexts and user images be rebound.
-#   - CONFIG_XNU_NATIVE_CS_HASH_CACHE is gone: the 12377 tree carries the hash
-#     cache work in native-4k-signature-hash-cache.patch rather than selecting it
-#     by name, so the switch no longer exists.
-#   - CONFIG_XNU_TRUST_CACHE_RUNTIME and CONFIG_XNU_DT_PANIC_REGION are kept. Both
-#     are board needs independent of the XNU version.
-#   - CONFIG_XNU_CRYPTO_BOOTSTRAP is deliberately not overridden; see below.
-#   - The storage and display reasoning is unchanged and still applies.
-#
-# A note on how this file is merged: cmd_defconfig concatenates the fragment
-# files in order and writes them out, it does not deduplicate. parse_config
-# takes the last value for a name, so the order below decides what wins. Do not
-# repeat a switch that a fragment already sets unless this file is meant to
-# override it -- a repeated switch shows up twice in .config and reads as a
-# contradiction even when it resolves correctly.
+# NATIVE_PAC has no switch in the first place: pointer
+# authentication comes in through patches/xnu-12377/native-pac-keys.patch and
+# native-pac-arm64-user-jop.patch, which are unconditional. There is no switch.
+# CONFIG_XNU_NATIVE_CS_HASH_CACHE likewise no longer exists; the 12377 tree
+# carries that work in native-4k-signature-hash-cache.patch.
 
-# The kernel link consumes the prelinked native drivers and the original kexts.
+# The crypto bootstrap mode. os:configs/ios.config sets "prelinked"; this board
+# overrides it to "source", and that override is the reason the virtio block
+# transport is off below.
 #
-# NOT OVERRIDDEN HERE, ON PURPOSE. os:configs/ios.config sets "prelinked"; the
-# only other arm64e iOS 26 board in the ecosystem (UniXNU-sheng, same
-# ipados-26.5.2-23F84 profile) overrides it to "source" in its own defconfig.
-# Both anchors exist as patches against xnu-12377 (source-corecrypto14-bootstrap
-# .patch and the prelinked path the iOS 16 port used), so either can compile.
-# Which one this board needs depends on whether corecrypto is reachable from the
-# prelinked kexts at the point the bootstrap runs, and that is a boot observation
-# this port does not have. Leaving the profile's value in place means an
-# inherited default rather than a guess; if the first boot panics in the crypto
-# bootstrap, the first thing to try is this line set to "source".
+# In prelinked mode build-xnu-4k-baseline.sh compiles osfmk/prng/prng_random.c
+# with -UXNU_SOURCE_CORECRYPTO14, which removes the definitions of
+# source_corecrypto14_original and source_corecrypto14_start_once.
+# libkern/c++/OSKext.cpp keeps the same #if guard and is NOT built with the -U,
+# so it still references both. The archives that would satisfy them are attached
+# only under [ "$BOOTSTRAP" = 0 ], so the bootstrap pass - the first one, which
+# has to write the compile records and kernel headers - links without them and
+# dies before producing either artifact. The driver needs those two artifacts to
+# tolerate a bootstrap failure, so the build stops there.
+#
+# "source" compiles prng_random.c without the -U: both symbols exist in every
+# pass and the ordering trap is gone. This is what UniXNU-sheng uses on the same
+# XNU tag and the same SoC family.
+CONFIG_XNU_CRYPTO_BOOTSTRAP="source"
 
 # DT handoff and diagnostics.
 CONFIG_XNU_DT_PANIC_REGION=y
@@ -58,71 +45,38 @@ CONFIG_XNU_TRUST_CACHE_RUNTIME=y
 # defconfig for the same profile.
 CONFIG_XNU_KERNEL_CHAINED_FIXUPS=y
 
-# Storage. ShengUfs drives the SM8550-class UFS controller and VirtioMmioBlock
-# publishes its request transport. On this target UFS is the only durable store:
-# the OS and SystemOS windows and the Data region all live on it.
+# Storage. ShengUfs drives the SM8550-class UFS controller. On this target UFS is
+# the only durable store: the OS and SystemOS windows and the Data region all
+# live on it, and the root volume is the UFS OS window.
+#
+# The virtio block transport is off, and not because it is unwanted. The build
+# script refuses NATIVE_VIRTIO_BLOCK unless NATIVE_AES is on, and refuses
+# NATIVE_AES unless the bootstrap mode is "prelinked" - which cannot build this
+# tree for the reason above. So the three switches are a single decision and this
+# board takes the source-mode side of it. Nothing on the storage path depends on
+# virtio: XNU_NATIVE_UFS has its own archive and consults neither switch.
+#
+# PENDING: if the virtio transport is ever needed, the fix belongs upstream -
+# either attach the crypto archive in the bootstrap pass too, or guard OSKext's
+# references with the same -U that the prng object gets.
 CONFIG_XNU_NATIVE_UFS=y
 CONFIG_XNU_NATIVE_VIRTIO_BLOCK=n
-
-# NATIVE_AES is required by NATIVE_VIRTIO_BLOCK, and it is not optional.
-# scripts/build-xnu-4k-baseline.sh rejects the build otherwise:
-#   if XNU_NATIVE_VIRTIO_BLOCK=1 and XNU_NATIVE_AES!=1 -> exit 1
-# No profile fragment supplies NATIVE_AES: profiles/arch/arm64e/configs/
-# common.config has seven switches and AES is not one of them, and
-# sm8550.config is a single NATIVE_ADRENO=y line. The switch therefore has to
-# be set here or VIRTIO_BLOCK has to be turned off; the pair is not
-# independent.
-#
-# NATIVE_AES in turn has its own precondition:
-#   NATIVE_AES=1 requires XNU_CRYPTO_BOOTSTRAP=prelinked AND
-#   XNU_SOURCE_CORECRYPTO14=1
-# SOURCE_CORECRYPTO14 comes from the arm64e arch fragment and
-# CRYPTO_BOOTSTRAP is inherited as "prelinked" from os:configs/ios.config, so
-# both are satisfied without a further override here. That is why this port
-# cannot follow UniXNU-sheng's "source" bootstrap: sheng sets neither
-# NATIVE_AES nor VIRTIO_BLOCK, while this board needs the virtio transport.
-#
-# PENDING: whether the prelinked crypto closure this now selects is actually
-# complete for myron is unverified - it is the same closure the iOS 16 port
-# never reached either. Expect the next failure, if any, in crypto bring-up.
 CONFIG_XNU_NATIVE_AES=n
 
-# The switches only add the IOKit personality-table entries (KernelConfigTables
-# gains 'IOClass' = NativeAES / NativeVirtioBlock). The classes themselves are
-# C++ code compiled into per-component archives, and nothing pulls those
-# archives onto the link line by itself. Without the two variables below the
-# link fails with
-#   Undefined symbols for architecture arm64e:
-#     "_source_corecrypto14_original"
-#     "_source_corecrypto14_start_once"
-# plus the NativeAES/NativeVirtioBlock class symbols.
+# ShengUfs subclasses IOBlockStorageDevice, whose classes live in the prelinked
+# IOStorageFamily kext. Compiling those classes in as well would register them
+# twice and panic, so libStorageBindings.a resolves the inherited slots to the
+# original prelinked code with absolute symbols instead. The archive is attached
+# explicitly because no config flag pulls it onto the link line.
 #
-# The crypto pair is the confusing part and worth spelling out: they are
-# declared in osfmk/prng/prng_random.c under #if defined(XNU_SOURCE_CORECRYPTO14),
-# and in prelinked mode build-xnu-4k-baseline.sh compiles THAT ONE OBJECT with
-# -UXNU_SOURCE_CORECRYPTO14, so the definitions vanish. OSKext.cpp keeps the
-# same #if but is not built with the -U, so it still references them. The
-# archives are what satisfy the reference.
+# libVerifiedRoot.a carries the board's verified-root crypto with an empty policy
+# table until a signed bundle exists.
 #
-# Compare UniXNU-Pagani_SM8750's oneplus13t_defconfig, the closest working
-# board (SM8750, prelinked, AES and virtio both on): it carries the same four
-# archive variables. SoftwareAES is the current name for the component whose
-# runtime class is NativeAES and whose legacy output was libNativeAES.a.
+# Neither archive has been re-qualified against the 23F84 storage bindings: the
+# slot layout in scripts/prelink-storage-bindings.json was measured out of the
+# iOS 16.7.16 kernelcache. Treat a slot mismatch at link or first storage access
+# as the expected failure on this path rather than a surprise.
 CONFIG_XNU_NATIVE_UFS_ARCHIVE="{tree}/build/sheng-ufs/libShengUfs.a"
-
-# Two archives the link needs but that no config flag pulls in on its own.
-# ShengUfs subclasses IOBlockStorageDevice, which lives in the prelinked
-# IOStorageFamily kext: compiling the class in as well registers it twice and
-# panics, so libStorageBindings.a resolves the inherited slots to the original
-# prelinked code with absolute symbols. libVerifiedRoot.a carries the real
-# VerifiedRoot crypto together with this board's policy table, which is empty
-# until a signed bundle exists.
-#
-# Both are produced by scripts of this repository, not by the shared series, and
-# neither has been re-qualified against the 23F84 storage bindings: the slot
-# layout in scripts/prelink-storage-bindings.json was measured out of the
-# iOS 16.7.16 kernelcache. Treat a link-time slot mismatch as the expected first
-# failure on this path rather than a surprise.
 CONFIG_XNU_EXTRA_LD_ARCHIVES="-Wl,-force_load,{tree}/build/io-storage-family/libStorageBindings.a -Wl,-force_load,{tree}/build/verified-root/libVerifiedRoot.a"
 
 # Display. GopFramebuffer presents through the UEFI GOP framebuffer the
@@ -140,9 +94,8 @@ CONFIG_XNU_EXTRA_LD_ARCHIVES="-Wl,-force_load,{tree}/build/io-storage-family/lib
 # with Metal through metal2vulkan and Turnip; nothing of that pipeline is in this
 # repository, so this port starts without GPU.
 #
-# This line is a deliberate override of the soc fragment, so it appears after it
-# in the merge order and the duplicated name in .config is expected. It is also
-# the one switch an earlier draft of the AGENTS.md warning calls out; keep it.
+# This is a deliberate override of the soc fragment, so it appears after it in
+# the merge order and the duplicated name in .config is expected.
 CONFIG_XNU_NATIVE_ADRENO=n
 
 # Not a QEMU board. The ArmVirtPlatform expert would claim the platform.
@@ -158,6 +111,4 @@ CONFIG_XNU_NATIVE_ADRENO=n
 # CONFIG_XNU_SHENG_PMGR is not set
 
 # AppleKeyStore state is selected as a component but has no switch here: the
-# arm64e series compiles it unconditionally. The iOS 16 profile left it out
-# because AKS was not reachable without the 4 KiB user ABI patches, which the
-# arm64e series carries.
+# arm64e series compiles it unconditionally.
