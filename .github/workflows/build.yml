@@ -301,26 +301,42 @@ jobs:
           grep -q '{tree}/build/io-storage-family/libStorageBindings.a' "$config"
           echo "storage binding and verified-root archives are on the link line"
 
+      # status.json is written by the step above, and every step is its own
+      # shell, so this one has to run in the same directory to see it.
+      #
+      # Detection is by PATH, not by file name. The two series share about 50
+      # file names (native-arm-pan.patch and friends) but not their contents:
+      # the device copies are rebased onto xnu-8796 and the shared ones onto
+      # xnu-12377. Comparing names would either miss a real double-application
+      # or flag a harmless collision, so compare where each entry resolves from.
       - name: Check the patch order is the arm64e one
+        working-directory: UniXNU
         run: |
           python3 - <<'PY'
           import json, pathlib
           status = json.load(open('status.json'))
-          order = [pathlib.Path(p).name for p in status.get('patch_order') or []]
-          # 68 arm64e + 2 SoC + 1 OS + 0 device, as resolved on 2026-11-16.
-          print('patch count:', len(order))
-          assert order[0] == 'bcm2837-machine-config.patch', order[0]
-          assert order[-1] == 'zzz-boot-progress.patch', order[-1]
+          order = status.get('patch_order') or []
+          names = [pathlib.Path(entry).name for entry in order]
+          print('patch count:', len(names))
+          assert names, 'the patch order is empty'
+          assert names[0] == 'bcm2837-machine-config.patch', names[0]
+          assert names[-1] == 'zzz-boot-progress.patch', names[-1]
           for required in ('native-pac-keys.patch', 'native-pac-arm64-user-jop.patch',
-                           'native-4k-user-abi.patch', 'zzz-boot-progress.patch'):
-              assert required in order, f'{required} missing from the patch order'
-          # The iOS 16 rebase must not be in this order: those 65 hunks are the
-          # same changes against xnu-8796 and applying both applies them twice.
-          for forbidden in ('xnu-8796.101.5-security-init.patch',
-                            'architectural-timer-entry.patch',
-                            'native-vfs-getvfs-with-vfsops.patch'):
-              assert forbidden not in order, f'{forbidden} belongs to the iOS 16 series'
-          print('patch order is the shared arm64e + SoC + OS series, no iOS 16 rebase')
+                           'native-4k-user-abi.patch', 'native-smp-secondary.patch'):
+              assert required in names, f'{required} missing from the patch order'
+          # The retired iOS 16 rebase lives in the device repository's
+          # patches/xnu/ and must contribute nothing. The arm64e series comes
+          # from UniXNU/patches/xnu-12377, the SoC two from sm8550-common.
+          retired = [entry for entry in order
+                     if pathlib.Path(entry).parent.name == 'xnu'
+                     and 'sm8550-common' not in entry.replace('\\', '/')]
+          assert not retired, f'the iOS 16 series is being applied: {retired}'
+          shared = [e for e in order if 'patches/xnu-12377' in e.replace('\\', '/')]
+          soc = [e for e in order if 'sm8550-common' in e.replace('\\', '/')]
+          print(f'shared arm64e patches: {len(shared)}, SoC patches: {len(soc)}')
+          assert len(shared) >= 60, f'only {len(shared)} shared patches resolved'
+          assert len(soc) == 2, f'expected 2 SoC patches, got {len(soc)}'
+          print('patch order is arch + soc + os; the iOS 16 rebase is not applied')
           PY
 
       - name: Check the recorded source pins
