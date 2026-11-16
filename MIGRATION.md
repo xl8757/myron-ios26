@@ -148,6 +148,53 @@ five jobs pass; the fifth is the kernel build, which is the slow one.
 | `Porting record` (separate workflow) | **passes** |
 | `Build the kernel` | runs; it rebuilds clang from source before it can compile |
 
+### Where the kernel build actually stops (2026-11-16)
+
+The kernel job got much further than the table above suggests. On the run at
+`0b65bc3` it:
+
+1. built the Linux toolchain from source — clang, lld, cctools-port, ~50 minutes
+   on a cold cache;
+2. applied **all 71 patches** without a single failure, including the vendored
+   `sheng-platform-power.patch` and `zzz-boot-progress.patch` last;
+3. started compiling, and stopped in `scripts/build-firehose.sh` (libdispatch)
+   with:
+
+```
+.../PrivateHeaders/sys/ucred.h:164:20: error:
+    '__ptrauth' qualifier must take between 1 and 3 arguments
+    struct label * OS_PTRAUTH_SIGNED_PTR_AUTH_NULL("ucred.cr_label") cr_label;
+libkern/os/base.h:355:47: note: expanded from macro
+    '__ptrauth(..., "authenticates-null-values")'
+```
+
+XNU 12377 writes that macro with **four** `__ptrauth` arguments. The clang that
+`scripts/linux/setup-toolchain.py` builds (`swift-6.4.0-RELEASE` LLVM, commit
+`58c46bae`, patched for `__builtin_xnu_type_*` and nothing else) accepts at most
+three. No patch in the UniXNU `xnu-12377` series touches `libkern/os/base.h` or
+that macro, so this is a **source-to-toolchain interface mismatch**, not
+something this board can configure away.
+
+It is also the same wall the public `hakios-arm64e-dada` port reports:
+[issue #4](https://github.com/superboyyy/hakios-arm64e-dada/issues/4) describes
+1,627 errors, all `__ptrauth qualifier must take between 1 and 3 arguments`,
+from `OS_PTRAUTH_SIGNED_PTR_AUTH_NULL` passing a fourth argument. Two independent
+ports hitting the identical error on the identical XNU tag is what makes this a
+finding rather than a local mistake.
+
+Two ways forward, and the reason neither is applied yet:
+
+- Build the toolchain clang with Apple-style support for the fourth argument.
+  Correct, and the larger job.
+- Patch `libkern/os/base.h` to drop `"authenticates-null-values"` under this
+  toolchain. One line, and it would let the build reach the next wall — but it
+  changes the semantics of every null-authenticating data pointer in the kernel.
+  That is a decision to understand first, not to paste in to get a green run.
+
+The patch order being clean is worth separating from the compile failure: 71 of
+71 patches applied, which is the first time the full arm64e + device order has
+been exercised end to end.
+
 `Resolve the build tree` passing is the milestone this migration was aiming at.
 That job installs the OS profile, fetches every pinned source, merges the four
 configuration fragments into a `.config`, assembles the build tree out of
