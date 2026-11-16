@@ -1,3 +1,22 @@
+diff --git a/clang/include/clang/Basic/Attr.td b/clang/include/clang/Basic/Attr.td
+index 61ef3fb..28903f9 100644
+--- a/clang/include/clang/Basic/Attr.td
++++ b/clang/include/clang/Basic/Attr.td
+@@ -3834,9 +3834,13 @@ def ObjCRequiresPropertyDefs : InheritableAttr {
+ 
+ def PointerAuth : TypeAttr {
+   let Spellings = [CustomKeyword<"__ptrauth">];
++  // XNU passes a fourth, string-literal argument ("authenticates-null-values")
++  // to request null authentication. Apple's clang accepts it; declare it here
++  // so TableGen does not cap the attribute at three arguments.
+   let Args = [IntArgument<"Key">,
+               BoolArgument<"AddressDiscriminated", 1>,
+-              IntArgument<"ExtraDiscriminator", 1>];
++              IntArgument<"ExtraDiscriminator", 1>,
++              StringArgument<"AuthenticatesNullValues", 1>];
+   let Documentation = [PtrAuthDocs];
+ }
+ 
 diff --git a/clang/include/clang/Basic/DiagnosticParseKinds.td b/clang/include/clang/Basic/DiagnosticParseKinds.td
 index 4ca2ed3..79eb812 100644
 --- a/clang/include/clang/Basic/DiagnosticParseKinds.td
