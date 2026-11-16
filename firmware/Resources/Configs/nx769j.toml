@@ -1,5 +1,5 @@
 #
-# NX769J (nubia RedMagic 9 series) — Mu-Silicium device configuration.
+# NX769J (nubia RedMagic 9 series) - Mu-Silicium device configuration.
 #
 # Derived from Resources/Configs/nx729j.toml, the nubia RedMagic 8 Pro+
 # configuration in UniXNU/uefi-sheng, which boots on hardware. Values that this
