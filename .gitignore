@@ -9,3 +9,12 @@
 __pycache__/
 *.pyc
 .DS_Store
+
+# CI run artifacts. The kernel bootstrap log alone is ~200 MB and the container
+# formats are tens of megabytes; they belong in the run's artifact, not the
+# repository. REPORT.md and run-summary.json stay tracked as the readable record.
+work/*/logs/
+work/*/logs.zip
+work/*/kernel-job.log
+work/*/kernel-tail.txt
+work/*/*.zip
