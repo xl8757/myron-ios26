@@ -28,4 +28,4 @@
 # native-smp-secondary.patch is deliberately absent: it edits board_config.h
 # line 134, which the arm64e BCM2837 block moves, and its MAX_CPUS 8 /
 # MAX_CPU_CLUSTERS 1 is older and less correct than that block's 8 / 2.
-soc:patches/xnu/sheng-platform-power.patch
+sheng-platform-power.patch
