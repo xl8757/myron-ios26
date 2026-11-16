@@ -99,23 +99,43 @@ jobs:
             dtc -I dtb -O dts "$name.dtb" > "$name.roundtrip.dts"
           done
 
+      # The stock DTB is Qualcomm's, not a curated tree: its CPUs carry
+      # compatible = "arm,armv8", not the arm,cortex-* names the NX769J tree
+      # used. An earlier draft of this step counted arm,cortex-* and got 0,
+      # which failed the step. Count what the file actually contains, and use
+      # `grep -c || true` wherever the answer may legitimately be zero, because
+      # this job runs under `bash -e` and grep -c exits 1 on no match.
       - name: Inspect the stock reference tree
         run: |
           echo "-- root --"
-          grep -E '^\s+(model|compatible) = ' myron.roundtrip.dts | head -4
-          echo "-- CPUs --"
-          grep -cE 'compatible = "arm,cortex-' myron.roundtrip.dts
+          grep -E '^\s+(model|compatible) = ' myron.roundtrip.dts | head -2
+          echo "-- cpu nodes --"
+          grep -c 'device_type = "cpu"' myron.roundtrip.dts || true
+          echo "-- cpu compatible --"
+          grep -E 'compatible = "arm,armv8"' myron.roundtrip.dts | head -2
           echo "-- memory --"
-          grep -A2 'device_type = "memory"' myron.roundtrip.dts | head -6
-          echo "-- reserved-memory children --"
+          grep -A2 'device_type = "memory"' myron.roundtrip.dts | head -4
+          echo "-- reserved-memory --"
           grep -c 'reserved-memory' myron.roundtrip.dts || true
+
+      # Assert the shape the kernel needs, not the SoC vendor's spelling. Eight
+      # CPU nodes and one memory node are what makes this a handoff tree rather
+      # than a stub; the compatible string is not load-bearing here because XNU
+      # reads the ADT, not the DTB, for CPU identity.
+      - name: Check the stock tree has the CPU and memory nodes
+        run: |
+          cpus=$(grep -c 'device_type = "cpu"' myron.roundtrip.dts || true)
+          echo "cpu nodes: $cpus"
+          test "$cpus" = "8"
+          test "$(grep -c 'device_type = "memory"' myron.roundtrip.dts || true)" -ge 1
+          echo "stock tree carries 8 CPU nodes and a memory node"
 
       - name: Inspect the ADT handoff tree
         run: |
           echo "-- root --"
           grep -E '^\s+(model|compatible) = ' myron-handoff.roundtrip.dts | head -4
           echo "-- ADT-exported nodes (unixnu,adt-name) --"
-          grep -c 'unixnu,adt-name' myron-handoff.roundtrip.dts
+          grep -c 'unixnu,adt-name' myron-handoff.roundtrip.dts || true
           echo "-- GICv3 interrupt controller --"
           grep -cE 'arm,gic-v3' myron-handoff.roundtrip.dts
           echo "-- UFS host --"
