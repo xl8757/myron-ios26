@@ -224,8 +224,8 @@ next_action = ["Capture the GOP geometry from the firmware and record a known fr
 
 [[area.evidence]]
 kind = "source"
-reference = "configs/nx769j_defconfig"
-result = "GopFramebuffer selection and the native legacy display flag described in this section"
+reference = "configs/myron_ios26_defconfig"
+result = "GopFramebuffer selection and the native legacy display flag described in this section. The defconfig was renamed when the board moved to iOS 26; the display reasoning is unchanged, and both display switches still resolve to n in the merged .config."
 
 [[area.evidence]]
 kind = "source"
