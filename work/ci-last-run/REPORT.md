@@ -66,3 +66,12 @@ Each run has moved the failure later, never back:
 8. missing component archive entries
 9. `-Werror` on a replayed recipe
 10. iOS deployment mismatch in the archive builders  ← this run
+
+## Repository sync note
+
+The findings for this run were pushed through the GitHub Contents API because
+`git push` kept failing on this machine with `Authentication failed` / connection
+resets while `gh api` worked. Remote `main` is therefore at
+`9821c426a5d7` (API commits) while the local checkout is at `c17c2ee`; both carry
+identical file content, verified byte for byte after the push. A `git pull
+--rebase` on the next session will reconcile the histories; nothing is lost.
