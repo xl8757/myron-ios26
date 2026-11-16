@@ -266,9 +266,14 @@ jobs:
       #
       # CONFIG_XNU_NATIVE_PAC is likewise not expected: PAC is unconditional in
       # patches/xnu-12377/native-pac-keys.patch, not a config choice.
+      # The device tree lives under out/myron/<profile>/<config>/, and that is
+      # the only .config this check may read. A bare `find out -name .config`
+      # also matches out/feeds/mu_basecore-*/.config, which is a DIRECTORY in the
+      # edk2 checkout, and reading it fails with IsADirectoryError. Restrict both
+      # find calls the same way.
       - name: Check the merged kernel configuration
         run: |
-          config=$(find UniXNU/out -name '.config' | head -1)
+          config=$(find UniXNU/out/myron -name '.config' -type f | head -1)
           test -n "$config"
           echo "merged config: $config"
           python3 myron-ios26/scripts/check-merged-config.py "$config" \
@@ -295,7 +300,8 @@ jobs:
       # line rather than a substring.
       - name: Check the archive list on the link line
         run: |
-          config=$(find UniXNU/out -name '.config' | head -1)
+          config=$(find UniXNU/out/myron -name '.config' -type f | head -1)
+          test -n "$config"
           grep -q 'XNU_EXTRA_LD_ARCHIVES=.*libStorageBindings\.a' "$config"
           grep -q 'XNU_EXTRA_LD_ARCHIVES=.*libVerifiedRoot\.a' "$config"
           grep -q '{tree}/build/io-storage-family/libStorageBindings.a' "$config"
