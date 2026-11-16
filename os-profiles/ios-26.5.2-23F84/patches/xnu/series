@@ -1,0 +1,14 @@
+# OS patch paths for xnu-12377, one per line in application order.
+#
+# Deliberately one entry. profiles/arch/arm64e/patches/xnu/series already holds
+# the 68-patch series against xnu-12377 - the BCM2837 machine layer, the 4 KiB
+# page work, the arm64e PAC keys, the offline-owner chain and the boot-progress
+# layer. The OS layer adds only what is specific to the user space being served,
+# and for iOS 26 against this arch series that is the boot-progress patch alone,
+# exactly as profiles/os/ipados-26.5.2-23F84 does.
+#
+# This is the structural difference from os-profiles/ios-16.7.16-20H392, whose
+# series is empty and whose 65 rebased patches live in the device repository at
+# patches/xnu/series, because no shared series existed for xnu-8796. Do not copy
+# that arrangement here: applying both would apply the same changes twice.
+arch:../../../patches/xnu-12377/zzz-boot-progress.patch

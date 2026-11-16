@@ -1,0 +1,14 @@
+# Device patch series for xnu-12377, one path per line in application order.
+#
+# Empty by design, and that is the honest state rather than an oversight.
+#
+# The sibling file patches/xnu/series holds 65 hunks hand-rebased onto
+# xnu-8796 for the iOS 16 target. They are not reused here: the arm64e arch
+# series against xnu-12377 already carries the machine layer, the 4 KiB work,
+# the PAC keys and the offline-owner chain, so applying the old rebase on top
+# would apply the same changes twice.
+#
+# Nothing myron-specific is known to be missing from the shared series yet, and
+# a patch added here would be unverified. Add one only when a build fails on a
+# gap that can be attributed to this board rather than to the arm64e series.
+# See MIGRATION.md.

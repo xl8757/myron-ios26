@@ -1,0 +1,575 @@
+name: Build
+
+# Build tests for the myron device repository (Redmi K90 Pro Max, SM8850).
+# Target: iOS 26.5.2 (23F84, Darwin 25.5.0, XNU 12377.121.6, arm64e).
+#
+#   validate         repository structure, TOML, pins, defconfig, and the UniXNU
+#                    porting-record checker against the real component catalog
+#   device-tree      compiles the two myron trees with dtc and checks the CPU
+#                    topology and the ADT handoff nodes
+#   resolve          installs the device-provided OS profile into the UniXNU
+#                    checkout, then runs the build driver through the documented
+#                    step 4 sequence: fetch resolves every source pin, defconfig
+#                    merges the ordered profile fragments, tree assembles the
+#                    build tree, and status reports the resolved profiles,
+#                    components, source revisions and patch order
+#   partition-safety runs the offline dual-system partition tests that back the
+#                    non-destructive install path: they assert that GPT entries
+#                    and GUIDs are preserved, that a check pass writes nothing,
+#                    and that any failure blocks GPT writes
+#   kernel           the real gate: resolves every archive builder and links XNU
+#                    12377 with the shared arm64e series. It needs the 23F84
+#                    restore image for prelink and cannot hold it, so it stops
+#                    there by design; see the step.
+#
+# None of these jobs touch a phone, write a partition, or need Apple's image.
+# The firmware volume is built from the sibling myron-uefi repository and is not
+# rebuilt here; see docs/UEFI-FIRMWARE.md.
+#
+# Booting the image, and confirming that Android still boots afterwards,
+# requires the device; see README.md for the device verification order.
+#
+# MIGRATION.md records what has actually been run and what has not. As of the
+# iOS 26 migration nothing here has linked XNU 12377.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate configuration
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the device repository
+        uses: actions/checkout@v4
+        with:
+          path: device
+
+      - name: Check out UniXNU for the component catalog
+        uses: actions/checkout@v4
+        with:
+          repository: UniXNU/UniXNU
+          ref: main
+          path: tools
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Repository structure
+        env:
+          UNIXNU_COMPONENTS: ${{ github.workspace }}/tools/components.toml
+        run: python3 device/scripts/check-repository.py device
+
+      - name: Porting record
+        run: python3 tools/scripts/porting-record.py check --device device
+
+  device-tree:
+    name: Compile the board device trees
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the device repository
+        uses: actions/checkout@v4
+        with:
+          path: device
+
+      - name: Install dtc
+        run: sudo apt-get update && sudo apt-get install -y device-tree-compiler
+
+      # Both trees are self-contained: myron.dts is the byte-exact stock DTB
+      # reference and myron-handoff.dts is the curated ADT handoff tree, and
+      # neither includes an sm8550.dtsi. That is why this job no longer checks
+      # out the SoC repository: the NX769J tree needed it, myron's does not.
+      - name: Compile dts/myron.dts and dts/myron-handoff.dts
+        run: |
+          for name in myron myron-handoff; do
+            dtc -I dts -O dtb -o "$name.dtb" "device/dts/$name.dts"
+            echo "$name.dtb bytes: $(wc -c < "$name.dtb")"
+            dtc -I dtb -O dts "$name.dtb" > "$name.roundtrip.dts"
+          done
+
+      - name: Inspect the stock reference tree
+        run: |
+          echo "-- root --"
+          grep -E '^\s+(model|compatible) = ' myron.roundtrip.dts | head -4
+          echo "-- CPUs --"
+          grep -cE 'compatible = "arm,cortex-' myron.roundtrip.dts
+          echo "-- memory --"
+          grep -A2 'device_type = "memory"' myron.roundtrip.dts | head -6
+          echo "-- reserved-memory children --"
+          grep -c 'reserved-memory' myron.roundtrip.dts || true
+
+      - name: Inspect the ADT handoff tree
+        run: |
+          echo "-- root --"
+          grep -E '^\s+(model|compatible) = ' myron-handoff.roundtrip.dts | head -4
+          echo "-- ADT-exported nodes (unixnu,adt-name) --"
+          grep -c 'unixnu,adt-name' myron-handoff.roundtrip.dts
+          echo "-- GICv3 interrupt controller --"
+          grep -cE 'arm,gic-v3' myron-handoff.roundtrip.dts
+          echo "-- UFS host --"
+          grep -cE 'qcom,sm8850-ufshc|qcom,sm8550-ufshc' myron-handoff.roundtrip.dts
+
+      # These are the two facts the ADT depends on. A handoff tree that loses the
+      # interrupt controller or the UFS node builds fine and then produces a
+      # payload with no arm-io children, which fails much later and much less
+      # clearly. Assert them here instead.
+      - name: Check the handoff tree carries what the ADT needs
+        run: |
+          test "$(grep -c 'unixnu,adt-name' myron-handoff.roundtrip.dts)" -ge 2
+          test "$(grep -cE 'arm,gic-v3' myron-handoff.roundtrip.dts)" -ge 1
+          test "$(grep -cE 'qcom,sm8850-ufshc|qcom,sm8550-ufshc' myron-handoff.roundtrip.dts)" -ge 1
+          echo "handoff tree carries arm-io children, GICv3 and UFS"
+
+  resolve:
+    name: Resolve the build tree
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out the device repository
+        uses: actions/checkout@v4
+        with:
+          path: myron-ios26
+
+      - name: Check out UniXNU
+        uses: actions/checkout@v4
+        with:
+          repository: UniXNU/UniXNU
+          ref: main
+          path: UniXNU
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # board.os_profile names a directory under UniXNU/profiles/os/. This port
+      # targets ios-26.5.2-23F84, which does not exist upstream yet, so the
+      # profile ships in this repository and is installed into the checkout
+      # before resolving. It must be contributed to UniXNU once it is complete.
+      #
+      # Note that the arch profile is NOT copied: arm64e already ships in
+      # UniXNU/profiles/arch/, and the OS profile's arch = "arm64e" selects it.
+      - name: Install the OS profile
+        run: |
+          profile=$(python3 -c "import tomllib;print(tomllib.load(open('myron-ios26/board.toml','rb'))['board']['os_profile'])")
+          echo "os profile: $profile"
+          if [ -d "myron-ios26/os-profiles/$profile" ]; then
+            mkdir -p "UniXNU/profiles/os"
+            cp -R "myron-ios26/os-profiles/$profile" "UniXNU/profiles/os/$profile"
+            echo "installed device-provided profile"
+          else
+            echo "using the profile already in UniXNU"
+          fi
+          test -f "UniXNU/profiles/os/$profile/profile.toml"
+
+      - name: Restore the source cache
+        uses: actions/cache@v4
+        with:
+          path: UniXNU/out/feeds
+          key: feeds-${{ hashFiles('myron-ios26/feeds.toml', 'myron-ios26/unixnu.lock', 'UniXNU/components.toml') }}
+          restore-keys: |
+            feeds-
+
+      - name: Fetch the pinned sources
+        working-directory: UniXNU
+        run: |
+          chmod +x unixnu
+          ./unixnu fetch -D ../myron-ios26
+
+      - name: Select the device configuration
+        working-directory: UniXNU
+        run: ./unixnu defconfig myron_ios26_defconfig -D ../myron-ios26
+
+      - name: Assemble the build tree
+        working-directory: UniXNU
+        run: ./unixnu tree -D ../myron-ios26
+
+      - name: Report the resolved configuration
+        working-directory: UniXNU
+        run: |
+          ./unixnu status --json -D ../myron-ios26 > status.json
+          python3 - <<'PY'
+          import json
+          status = json.load(open('status.json'))
+          print('device      :', status.get('device'), status.get('name'))
+          print('output      :', status.get('output'))
+          print('configured  :', status.get('configured'))
+          print('schema      :', status.get('schema_version'))
+          profiles = status.get('profiles') or {}
+          for key, value in profiles.items():
+              print(f'profile     : {key:8} {value}')
+          print('patch order :', len(status.get('patch_order') or []))
+          board = status.get('board') or {}
+          arch = (board.get('arch') or {})
+          print('arch        :', arch.get('name'), 'page_size', arch.get('page_size'))
+          kernel = (board.get('kernel') or {})
+          print('prelink     :')
+          for key, value in (kernel.get('prelink') or {}).items():
+              if key == 'roots':
+                  print(f'   roots     {len(value)} entries')
+              else:
+                  print(f'   {key:18} {value}')
+          components = status.get('components') or []
+          print(f'components  : {len(components)}')
+          for component in components:
+              print(f"   {component['id']:22} {component['kind']:8} {component.get('build_stage')}")
+          PY
+
+      # The resolved configuration is already checked above; what this step adds
+      # is that the MERGED .config has the switches this board relies on.
+      #
+      # Every expected value here was confirmed against the fragments that
+      # actually supply it, on 2026-11-16:
+      #   arch profiles/arch/arm64e/configs/common.config  BUILD_ARCHIVES,
+      #     SOURCE_CORECRYPTO14, SOURCE_PTHREAD, ARM_DT_PLATFORM, ARMCPU,
+      #     NATIVE_ARCH_TIMER, NATIVE_PAN
+      #   soc  UniXNU-sm8550-common/configs/sm8550.config  NATIVE_ADRENO=y only
+      #   os   os-profiles/ios-26.5.2-23F84/configs/ios.config  CRYPTO_BOOTSTRAP
+      #   device configs/myron_ios26_defconfig  the rest
+      #
+      # CONFIG_XNU_NATIVE_AES is deliberately NOT expected: it appears in no
+      # fragment on this target. The iOS 16 skeleton's check expected it, which
+      # would have failed here for a switch nothing sets. AES comes in through
+      # SoftwareAES as a component, not through a switch.
+      #
+      # CONFIG_XNU_NATIVE_PAC is likewise not expected: PAC is unconditional in
+      # patches/xnu-12377/native-pac-keys.patch, not a config choice.
+      - name: Check the merged kernel configuration
+        run: |
+          config=$(find UniXNU/out -name '.config' | head -1)
+          test -n "$config"
+          echo "merged config: $config"
+          python3 myron-ios26/scripts/check-merged-config.py "$config" \
+            XNU_ARM_DT_PLATFORM=y \
+            XNU_ARMCPU=y \
+            XNU_BUILD_ARCHIVES=y \
+            XNU_SOURCE_CORECRYPTO14=y \
+            XNU_SOURCE_PTHREAD=y \
+            XNU_NATIVE_ARCH_TIMER=y \
+            XNU_NATIVE_PAN=y \
+            XNU_KERNEL_CHAINED_FIXUPS=y \
+            XNU_CRYPTO_BOOTSTRAP=prelinked \
+            XNU_NATIVE_UFS=y \
+            XNU_NATIVE_VIRTIO_BLOCK=y \
+            XNU_NATIVE_ADRENO=n \
+            XNU_NATIVE_LEGACY_DISPLAY=n \
+            XNU_NATIVE_MOBILE_DISPLAY=n \
+            XNU_ARMVIRT_PLATFORM=n \
+            XNU_SHENG_PMGR=n
+
+      # The prefix of every string value is load-bearing: kernel.py turns
+      # CONFIG_XNU_<NAME> into the XNU_<NAME> variable the legacy build script
+      # reads, and {tree} is expanded into the archive paths. Assert the whole
+      # line rather than a substring.
+      - name: Check the archive list on the link line
+        run: |
+          config=$(find UniXNU/out -name '.config' | head -1)
+          grep -q 'XNU_EXTRA_LD_ARCHIVES=.*libStorageBindings\.a' "$config"
+          grep -q 'XNU_EXTRA_LD_ARCHIVES=.*libVerifiedRoot\.a' "$config"
+          grep -q '{tree}/build/io-storage-family/libStorageBindings.a' "$config"
+          echo "storage binding and verified-root archives are on the link line"
+
+      - name: Check the patch order is the arm64e one
+        run: |
+          python3 - <<'PY'
+          import json, pathlib
+          status = json.load(open('status.json'))
+          order = [pathlib.Path(p).name for p in status.get('patch_order') or []]
+          # 68 arm64e + 2 SoC + 1 OS + 0 device, as resolved on 2026-11-16.
+          print('patch count:', len(order))
+          assert order[0] == 'bcm2837-machine-config.patch', order[0]
+          assert order[-1] == 'zzz-boot-progress.patch', order[-1]
+          for required in ('native-pac-keys.patch', 'native-pac-arm64-user-jop.patch',
+                           'native-4k-user-abi.patch', 'zzz-boot-progress.patch'):
+              assert required in order, f'{required} missing from the patch order'
+          # The iOS 16 rebase must not be in this order: those 65 hunks are the
+          # same changes against xnu-8796 and applying both applies them twice.
+          for forbidden in ('xnu-8796.101.5-security-init.patch',
+                            'architectural-timer-entry.patch',
+                            'native-vfs-getvfs-with-vfsops.patch'):
+              assert forbidden not in order, f'{forbidden} belongs to the iOS 16 series'
+          print('patch order is the shared arm64e + SoC + OS series, no iOS 16 rebase')
+          PY
+
+      - name: Check the recorded source pins
+        run: |
+          echo "unixnu.lock after fetch:"
+          git -C myron-ios26 --no-pager diff -- unixnu.lock
+          git -C myron-ios26 diff --quiet -- unixnu.lock || {
+            echo '::error::unixnu.lock does not match what ./unixnu fetch resolved. Run ./unixnu fetch and commit the result.'
+            exit 1
+          }
+          echo "unixnu.lock matches the resolved sources"
+
+  partition-safety:
+    name: Non-destructive install path
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out UniXNU
+        uses: actions/checkout@v4
+        with:
+          repository: UniXNU/UniXNU
+          ref: main
+          path: tools
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # The dual-system partition tool carves a `unixnu` partition from the end
+      # of userdata and must leave everything else alone. These are its offline
+      # tests: no phone required, documented for Linux, WSL and macOS.
+      - name: Run the dual-system partition tests
+        working-directory: tools
+        run: python3 scripts/dual_sys/test_dual_sys.py -v
+
+      - name: Check the recovery script parses
+        run: sh -n tools/scripts/dual_sys/twrp.sh
+
+      - name: Build the F2FS shrink helper and run its self-test
+        run: |
+          cc -O2 -Wall -Wextra -Werror \
+            tools/scripts/dual_sys/f2fs-shrink.c -o /tmp/f2fs-shrink-test
+          file /tmp/f2fs-shrink-test
+          /tmp/f2fs-shrink-test self-test
+
+      # The plan bundle carries both GPT copies before and after, so a run that
+      # stops part way can be inspected. Assert the builder emits them.
+      - name: Check the plan bundle layout
+        run: |
+          python3 - <<'PY'
+          import pathlib
+          root = pathlib.Path('tools/scripts/dual_sys')
+          for name in ('partition.py', 'gpt.py', 'f2fs-shrink.c', 'twrp.sh', 'test_dual_sys.py'):
+              assert (root / name).is_file(), f'{name} missing'
+          text = (root / 'partition.py').read_text(encoding='utf-8')
+          for entry in ('gpt-primary.before', 'gpt-backup.before',
+                        'gpt-primary.after', 'gpt-backup.after', 'SHA256SUMS'):
+              assert entry in text, f'plan bundle does not emit {entry}'
+          print('plan bundle emits both GPT copies before and after, plus SHA256SUMS')
+          PY
+
+  # The real gate for this port: XNU 12377 plus the shared arm64e series must
+  # build.
+  # On Linux the kernel step uses upstream clang and an open source Mach-O
+  # toolchain instead of Xcode; scripts/linux/setup-toolchain.py installs it.
+  # The toolchain is expensive to build and is cached between runs.
+  kernel:
+    name: Build the kernel
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - name: Check out the device repository
+        uses: actions/checkout@v4
+        with:
+          path: myron-ios26
+
+      - name: Check out UniXNU
+        uses: actions/checkout@v4
+        with:
+          repository: UniXNU/UniXNU
+          ref: main
+          path: UniXNU
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # The host dependencies come from apt, not from the toolchain cache, so
+      # they have to be installed even when the cached toolchain is restored.
+      # Without this the cache hit skips setup-toolchain.py and --check then
+      # fails on missing libclang, libbsd and the build tools.
+      - name: Install the host dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config ninja-build cmake flex bison \
+            python3 python3-dev xz-utils bzip2 cpio rsync curl wget \
+            libssl-dev zlib1g-dev libbsd-dev uuid-dev llvm-dev libclang-dev \
+            tcsh unifdef mtools device-tree-compiler
+
+      # Restore and save are separate steps. The kernel job is expected to fail
+      # while this port is being brought up, and actions/cache's combined form
+      # only saves on success, so without an explicit save the entry is never
+      # written and every run rebuilds clang from source.
+      - name: Restore the toolchain cache
+        id: toolchain
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/unixnu-linux
+          key: unixnu-linux-toolchain-${{ hashFiles('UniXNU/scripts/linux/**') }}
+
+      # Install under the runner's home, not /opt. The path is expanded before
+      # sudo, which resets HOME to /root. scripts/unixnu/kernel.py resolves the
+      # toolchain through UNIXNU_TOOLCHAIN, so the same variable drives both the
+      # install and the build.
+      # Run unconditionally. The installer is idempotent: each component is
+      # skipped when it already exists, so on a cache hit it only places the
+      # shims the cache cannot hold. /usr/bin/xcrun is one of them and
+      # scripts/unixnu/kernel.py requires it, so skipping this step on a cache
+      # hit leaves the build failing with "xcrun missing".
+      - name: Install the Linux toolchain
+        working-directory: UniXNU
+        run: |
+          TOOLCHAIN="$HOME/unixnu-linux"
+          sudo env UNIXNU_TOOLCHAIN="$TOOLCHAIN" python3 scripts/linux/setup-toolchain.py "$TOOLCHAIN"
+          sudo chown -R "$(id -u):$(id -g)" "$TOOLCHAIN"
+
+      - name: Save the toolchain cache
+        if: always() && steps.toolchain.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/unixnu-linux
+          key: unixnu-linux-toolchain-${{ hashFiles('UniXNU/scripts/linux/**') }}
+
+      - name: Check the toolchain
+        working-directory: UniXNU
+        run: UNIXNU_TOOLCHAIN="$HOME/unixnu-linux" python3 scripts/linux/setup-toolchain.py --check --llvm-config /usr/bin/llvm-config
+
+      - name: Install the OS profile
+        run: |
+          profile=$(python3 -c "import tomllib;print(tomllib.load(open('myron-ios26/board.toml','rb'))['board']['os_profile'])")
+          test -d "myron-ios26/os-profiles/$profile"
+          mkdir -p "UniXNU/profiles/os"
+          cp -R "myron-ios26/os-profiles/$profile" "UniXNU/profiles/os/$profile"
+          echo "installed os profile: $profile"
+
+      - name: Restore the source cache
+        uses: actions/cache@v4
+        with:
+          path: UniXNU/out
+          key: xnu12377-sources-${{ hashFiles('myron-ios26/feeds.toml', 'myron-ios26/unixnu.lock', 'UniXNU/components.toml') }}
+          restore-keys: |
+            xnu12377-sources-
+
+      - name: Fetch, configure and assemble
+        working-directory: UniXNU
+        run: |
+          chmod +x unixnu
+          ./unixnu fetch -D ../myron-ios26
+          ./unixnu defconfig myron_ios26_defconfig -D ../myron-ios26
+          ./unixnu tree -D ../myron-ios26
+
+      # On the iOS 16 target this asserted that the resolved order equals
+      # patches/xnu/series exactly, because that file was the whole order. It is
+      # not any more: the order is the shared arch + soc + os series, and
+      # patches/xnu/series is the retired iOS 16 rebase.
+      #
+      # Detection is by PATH, not by file name. The two series share about 50
+      # file names (native-arm-pan.patch and friends) but not their contents:
+      # the device copies are rebased onto xnu-8796 and the shared ones onto
+      # xnu-12377. Comparing names would either miss a real double-application or
+      # flag a harmless collision, so compare where each entry came from.
+      - name: Verify the patch order
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, subprocess
+          out = subprocess.run(['UniXNU/unixnu', 'status', '--json', '-D', 'myron-ios26'],
+                               capture_output=True, text=True, check=True).stdout
+          status = json.loads(out)
+          order = status.get('patch_order') or []
+          names = [pathlib.Path(entry).name for entry in order]
+          print(f'resolved patch order: {len(order)} entries')
+          for entry in order:
+              print('  ', entry)
+          assert names, 'the patch order is empty'
+          assert names[0] == 'bcm2837-machine-config.patch', names[0]
+          assert names[-1] == 'zzz-boot-progress.patch', names[-1]
+          for required in ('native-pac-keys.patch', 'native-pac-arm64-user-jop.patch',
+                           'native-4k-user-abi.patch', 'native-smp-secondary.patch'):
+              assert required in names, f'{required} missing from the patch order'
+          # The retired iOS 16 rebase lives in patches/xnu/ and must contribute
+          # nothing. Its own directory is the signature: the arm64e series comes
+          # from UniXNU/patches/xnu-12377, the SoC two from sm8550-common.
+          retired = [entry for entry in order
+                     if pathlib.Path(entry).parent.name == 'xnu'
+                     and 'sm8550-common' not in entry]
+          assert not retired, f'the iOS 16 series is being applied: {retired}'
+          shared = [entry for entry in order if 'patches/xnu-12377' in entry]
+          soc = [entry for entry in order if 'sm8550-common' in entry]
+          print(f'shared arm64e patches: {len(shared)}, SoC patches: {len(soc)}')
+          assert len(shared) >= 60, f'only {len(shared)} shared patches resolved'
+          assert len(soc) == 2, f'expected 2 SoC patches, got {len(soc)}'
+          print('patch order is arch + soc + os; the iOS 16 rebase is not applied')
+          PY
+
+      # Parallel make interleaves its output so heavily that the diagnostic for
+      # the failing compile is garbled past reading. On failure, repeat serially
+      # so the log names the actual error, then decide.
+      #
+      # CCACHE points XNU's `$(CCACHE) $(CC)` hook at the compile recorder. The
+      # archive builders replay a per-object recipe, {directory, file, arguments},
+      # and nothing on Linux writes those records without it, so the archive stage
+      # stops at the first builder that reads one. The recorder is a transparent
+      # wrapper: it writes the record and then execs the real compiler.
+      #
+      # CI cannot run the prelink half of this step: it needs the 23F84 restore
+      # image, which is not redistributable and about 11 GB. What CI does prove
+      # is that XNU 12377 with the shared arm64e series compiles and links on
+      # Linux with the open source Mach-O toolchain. The step asserts exactly
+      # that, and treats a stop at the missing restore image as the expected
+      # boundary.
+      - name: Build the kernel
+        working-directory: UniXNU
+        env:
+          CCACHE: python3 ${{ github.workspace }}/myron-ios26/scripts/compile-records.py
+        run: |
+          if UNIXNU_TOOLCHAIN="$HOME/unixnu-linux" ./unixnu build kernel -D ../myron-ios26 2>&1 | tee build.log; then
+            echo "kernel build passed"
+            exit 0
+          fi
+          echo "::warning::parallel build failed; repeating serially for a readable diagnostic"
+          rm -rf out/myron/*/myron_ios26/logs
+          UNIXNU_TOOLCHAIN="$HOME/unixnu-linux" ./unixnu build kernel -j 1 -D ../myron-ios26 2>&1 | tee build.log
+          status=${PIPESTATUS[0]}
+
+          kernel=$(find out -name 'mach.development.bcm2837*' -type f | head -1)
+          if [ -z "$kernel" ]; then
+            echo '::error::the kernel did not link'
+            exit 1
+          fi
+          echo "linked kernel: $kernel ($(wc -c < "$kernel") bytes)"
+
+          if [ "$status" -eq 0 ]; then
+            echo "kernel build passed"
+          elif grep -qE 'IPSW not found|kernelcache not found|does not match the kernelcache' build.log; then
+            echo '::warning::the kernel built and linked; prelink needs the 23F84 restore image, which CI cannot hold'
+          else
+            echo '::error::the kernel step failed after the link'
+            exit 1
+          fi
+
+      - name: Report the kernel
+        if: always()
+        run: |
+          find UniXNU/out -maxdepth 6 -name 'kernel.macho*' -o -name '*.unstripped.noctf' 2>/dev/null | head
+          find UniXNU/out -name '*.log' 2>/dev/null | head -20
+          records=$(find UniXNU/out -name '*.o.json' | wc -l)
+          echo "compile records written: $records"
+          test "$records" -gt 0 || echo '::warning::no compile records; the archive builders replay them and will fail'
+
+      # The compile errors land in the build logs rather than on stdout, so ship
+      # them as an artifact instead of leaving a failed run undiagnosable.
+      - name: Upload the build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernel-build-logs
+          path: UniXNU/out/**/logs/
+          if-no-files-found: ignore
+          retention-days: 14
+

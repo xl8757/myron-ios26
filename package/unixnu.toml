@@ -1,0 +1,19 @@
+# Menu and entry definitions for the payload FAT volume. package/ appears as
+# kits/myron in the assembled build tree.
+version = 1
+
+[boot]
+timeout = 3
+default = "xnu"
+
+[[entry]]
+id = "xnu"
+title = "Redmi K90 Pro Max (myron) - Darwin XNU 12377 / iOS 26"
+type = "xnu"
+path = "Payloads/kernel.macho"
+
+[[entry]]
+id = "exit"
+title = "Return to firmware"
+type = "action"
+action = "exit"

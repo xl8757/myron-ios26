@@ -1,0 +1,117 @@
+# myron / iOS 26.5.2 (23F84, XNU 12377, arm64e) kernel configuration (skeleton).
+# PENDING: not yet qualified against a 23F84 kernelcache. See MIGRATION.md.
+#
+# CONFIG_XNU_<NAME> becomes XNU_<NAME> for the kernel build script: y and n are 1
+# and 0, a quoted string or a number is passed through, {tree} is the build tree.
+#
+# Configuration fragments apply first in this order:
+#   arch:configs/common.config  soc:configs/sm8550.config  os:configs/ios.config
+# and this file is applied last, so a value set here replaces the inherited one.
+#
+# What changed from myron_ios16_defconfig, and why:
+#
+#   - CONFIG_XNU_NATIVE_PAC does not exist in the arm64e arch fragment, despite
+#     what an earlier draft of this comment claimed. arm64e's common.config sets
+#     only: BUILD_ARCHIVES, SOURCE_CORECRYPTO14, SOURCE_PTHREAD,
+#     ARM_DT_PLATFORM, ARMCPU, NATIVE_ARCH_TIMER, NATIVE_PAN. Pointer
+#     authentication comes in through patches/xnu-12377/native-pac-keys.patch and
+#     native-pac-arm64-user-jop.patch, which are unconditional, not through a
+#     CONFIG_ switch. Nothing needs to be set here for PAC, and there is no
+#     switch to set.
+#   - CONFIG_XNU_KERNEL_CHAINED_FIXUPS=y is added. It is present in
+#     sheng_ipados26_defconfig for the same 23F84 profile and is what lets the
+#     iOS 26 prelinked kexts and user images be rebound.
+#   - CONFIG_XNU_NATIVE_CS_HASH_CACHE is gone: the 12377 tree carries the hash
+#     cache work in native-4k-signature-hash-cache.patch rather than selecting it
+#     by name, so the switch no longer exists.
+#   - CONFIG_XNU_TRUST_CACHE_RUNTIME and CONFIG_XNU_DT_PANIC_REGION are kept. Both
+#     are board needs independent of the XNU version.
+#   - CONFIG_XNU_CRYPTO_BOOTSTRAP is deliberately not overridden; see below.
+#   - The storage and display reasoning is unchanged and still applies.
+#
+# A note on how this file is merged: cmd_defconfig concatenates the fragment
+# files in order and writes them out, it does not deduplicate. parse_config
+# takes the last value for a name, so the order below decides what wins. Do not
+# repeat a switch that a fragment already sets unless this file is meant to
+# override it -- a repeated switch shows up twice in .config and reads as a
+# contradiction even when it resolves correctly.
+
+# The kernel link consumes the prelinked native drivers and the original kexts.
+#
+# NOT OVERRIDDEN HERE, ON PURPOSE. os:configs/ios.config sets "prelinked"; the
+# only other arm64e iOS 26 board in the ecosystem (UniXNU-sheng, same
+# ipados-26.5.2-23F84 profile) overrides it to "source" in its own defconfig.
+# Both anchors exist as patches against xnu-12377 (source-corecrypto14-bootstrap
+# .patch and the prelinked path the iOS 16 port used), so either can compile.
+# Which one this board needs depends on whether corecrypto is reachable from the
+# prelinked kexts at the point the bootstrap runs, and that is a boot observation
+# this port does not have. Leaving the profile's value in place means an
+# inherited default rather than a guess; if the first boot panics in the crypto
+# bootstrap, the first thing to try is this line set to "source".
+
+# DT handoff and diagnostics.
+CONFIG_XNU_DT_PANIC_REGION=y
+CONFIG_XNU_TRUST_CACHE_RUNTIME=y
+
+# iOS 26 binaries are linked with chained fixups; without this the prelinked
+# kexts and user space images cannot be rebound. Present in sheng's iPadOS 26
+# defconfig for the same profile.
+CONFIG_XNU_KERNEL_CHAINED_FIXUPS=y
+
+# Storage. ShengUfs drives the SM8550-class UFS controller and VirtioMmioBlock
+# publishes its request transport. On this target UFS is the only durable store:
+# the OS and SystemOS windows and the Data region all live on it.
+CONFIG_XNU_NATIVE_UFS=y
+CONFIG_XNU_NATIVE_VIRTIO_BLOCK=y
+
+# Two archives the link needs but that no config flag pulls in on its own.
+# ShengUfs subclasses IOBlockStorageDevice, which lives in the prelinked
+# IOStorageFamily kext: compiling the class in as well registers it twice and
+# panics, so libStorageBindings.a resolves the inherited slots to the original
+# prelinked code with absolute symbols. libVerifiedRoot.a carries the real
+# VerifiedRoot crypto together with this board's policy table, which is empty
+# until a signed bundle exists.
+#
+# Both are produced by scripts of this repository, not by the shared series, and
+# neither has been re-qualified against the 23F84 storage bindings: the slot
+# layout in scripts/prelink-storage-bindings.json was measured out of the
+# iOS 16.7.16 kernelcache. Treat a link-time slot mismatch as the expected first
+# failure on this path rather than a surprise.
+CONFIG_XNU_EXTRA_LD_ARCHIVES="-Wl,-force_load,{tree}/build/io-storage-family/libStorageBindings.a -Wl,-force_load,{tree}/build/verified-root/libVerifiedRoot.a"
+
+# Display. GopFramebuffer presents through the UEFI GOP framebuffer the
+# uefi-myron firmware publishes, but its kernel-side provider is a late archive
+# that no builder in this tree produces yet. Both stay off until that archive
+# exists, so the kernel links headless. The iOS 26 iPadOS profiles on sheng turn
+# these on with build-gop-legacy-display-27.py; that script does not exist here
+# and inventing one is not part of this migration.
+# CONFIG_XNU_NATIVE_LEGACY_DISPLAY is not set
+# CONFIG_XNU_NATIVE_MOBILE_DISPLAY is not set
+
+# soc:configs/sm8550.config sets CONFIG_XNU_NATIVE_ADRENO=y. That stack targets
+# Adreno 740 on SM8550; myron has an Adreno 840 on SM8850 and has no qualified
+# driver, so the native GPU path is off. The public dada port reaches SpringBoard
+# with Metal through metal2vulkan and Turnip; nothing of that pipeline is in this
+# repository, so this port starts without GPU.
+#
+# This line is a deliberate override of the soc fragment, so it appears after it
+# in the merge order and the duplicated name in .config is expected. It is also
+# the one switch an earlier draft of the AGENTS.md warning calls out; keep it.
+CONFIG_XNU_NATIVE_ADRENO=n
+
+# Not a QEMU board. The ArmVirtPlatform expert would claim the platform.
+# CONFIG_XNU_ARMVIRT_PLATFORM is not set
+
+# RAM block storage is not used on this board; the root volume is the UFS OS
+# window and persistence is the UFS Data region.
+# CONFIG_XNU_NATIVE_RAM_BLOCK is not set
+
+# No board PMGR driver. The SM8850 has no Apple PMGR block; the ADT reports a
+# virtual platform instead (vmm-present), which is what keeps AMFI from waiting
+# on an ApplePMGRNub.
+# CONFIG_XNU_SHENG_PMGR is not set
+
+# AppleKeyStore state is selected as a component but has no switch here: the
+# arm64e series compiles it unconditionally. The iOS 16 profile left it out
+# because AKS was not reachable without the 4 KiB user ABI patches, which the
+# arm64e series carries.

@@ -1,0 +1,132 @@
+[
+  {
+    "field": "kernel.prelink.kernelcache_sha256",
+    "status": "OPEN",
+    "detail": "The pin is inherited from UniXNU/profiles/os/ipados-26.5.2-23F84 and has not been measured here. unixnu build kernel fails closed with 'does not match the kernelcache this board was qualified against' until it is confirmed. The pin covers the decompressed arm64 Mach-O slice only, not the whole fat IMG4 image.",
+    "how_to_resolve": "Fetch the 23F84 restore image (about 11 GB) and run scripts/extract-ipsw-pins.py against the extracted kernelcache; replace the value in os-profiles/ios-26.5.2-23F84/profile.toml if it differs."
+  },
+  {
+    "field": "kernel.prelink.early_security_init",
+    "status": "OPEN",
+    "detail": "Inherited as com.apple.driver.AppleMobileFileIntegrity=0xffffffe0008f13c8 for 23F84. It is a measured __TEXT_EXEC address inside that kernelcache, not a PMGR probe, so the 'AMFI: No PMGR?' panic the SM8650 ports report does not describe this path. It is still unverified on SM8850 and the address is version bound.",
+    "how_to_resolve": "Confirm the address resolves inside the module's __TEXT_EXEC segment once a kernelcache is available, then treat a panic in AMFI start as the signal that it is wrong."
+  },
+  {
+    "field": "kernel.prelink.roots",
+    "status": "OPEN",
+    "detail": "30 bundle identifiers inherited from the iPadOS 26 profile. emit_prelink refuses to start without them, and a root absent from the image's __PRELINK_INFO fails the build, so the list is self-checking once the kernelcache is present. Not yet exercised against a local image.",
+    "how_to_resolve": "The first prelink run validates the list; remove an entry only if the kernelcache proves it absent."
+  },
+  {
+    "field": "payload.adt.root_match_volume_uuid",
+    "status": "OPEN",
+    "detail": "546DFF4A-4172-4026-9F1B-7FDAD45F3D2E is the iPadOS 26.5.2 OS volume UUID, inherited. The iOS 16 value (DADD93F8-...) belongs to the 20H392 image and cannot be reused: the UFS block class publishes the window by volume UUID, so a wrong value leaves the root unmounted rather than failing loudly.",
+    "how_to_resolve": "Run scripts/extract-root-volume-uuid.py on myron's built userdata-root.img once the userdata step can run."
+  },
+  {
+    "field": "root.os_image_sha256 / root.systemos_image_sha256",
+    "status": "OPEN",
+    "detail": "Inherited from the iPadOS 26 profile. They describe the APFS volumes the restore image produces, so they should be image properties rather than board properties, but nothing in this repository has produced those volumes for myron.",
+    "how_to_resolve": "Confirm against the first successful unixnu build userdata."
+  },
+  {
+    "field": "payload.adt.chip_id",
+    "status": "OPEN",
+    "detail": "Changed from 207 (iPhone X, 0x8015) to 8142 (iPad17,3, 0x8142), matching the chip_id 33090 the profile declares and the value UniXNU-sheng writes for the same identity. devicetree.py parses this field as hex. The tool performs no cross-check against the profile, so a mismatch is silent: MobileDevice looks the pair up and reports 'a software update is required'.",
+    "how_to_resolve": "Confirm on first boot; this is the first value to reconcile if the device class comes back unknown."
+  },
+  {
+    "field": "payload.adt.ipad_identity",
+    "status": "OPEN",
+    "detail": "Flipped from false to true because the profile forges iPad17,3. The iOS 16 profile forged iPhone X and set this false. Nothing has exercised the iPad shape on this board.",
+    "how_to_resolve": "Confirm the ADT the payload step emits carries the iPad product keys, not the iPhone set."
+  },
+  {
+    "field": "kernel.CONFIG_XNU_CRYPTO_BOOTSTRAP",
+    "status": "SCOPED",
+    "detail": "os:configs/ios.config sets 'prelinked' and the defconfig deliberately does not override it. UniXNU-sheng, on the same ipados-26.5.2-23F84 profile, overrides it to 'source'. Both anchors exist as patches, so either compiles; which one this board needs is a boot observation this port does not have.",
+    "evidence": "configs/sheng_ipados26_defconfig sets CONFIG_XNU_CRYPTO_BOOTSTRAP=\"source\" next to CONFIG_XNU_SOURCE_STORAGE, CONFIG_XNU_OWNER_ROOT_AUDIT and CONFIG_XNU_OWNER_ROOT_TRUST.",
+    "options": [
+      "keep 'prelinked' and let the first boot decide",
+      "switch to 'source' to match the only other verified arm64e iOS 26 board"
+    ]
+  },
+  {
+    "field": "kernel.archives.libStorageBindings",
+    "status": "SCOPED",
+    "detail": "scripts/prelink-storage-bindings.json holds 190 IOBlockStorageDevice slots measured out of the iOS 16.7.16 kernelcache. The 23F84 kernelcache has its own layout and nothing has re-measured it. build-storage-bindings.py will still emit an archive, so this fails at link or at first storage access rather than at build time.",
+    "how_to_resolve": "Re-run scripts/scan-prelink-storage.py against the 23F84 kernelcache and rewrite the bindings file."
+  },
+  {
+    "field": "kernel.archives.libVerifiedRoot",
+    "status": "SCOPED",
+    "detail": "build-verified-root.py emits a real crypto implementation with an empty policy table, because no signed root-policy bundle exists for this board. The archive links; whether the empty table is accepted at runtime is unknown.",
+    "how_to_resolve": "Sign a policy bundle for the OS and SystemOS windows, then feed it to the builder."
+  },
+  {
+    "field": "kernel.patch_series.device",
+    "status": "SCOPED",
+    "detail": "patches/xnu26/series is empty on purpose. The 65 hunks in patches/xnu/series were rebased onto xnu-8796 for the iOS 16 target; the shared arm64e arch series against xnu-12377 carries the same changes, so applying both applies them twice. Leaving the old series unreferenced is the safe state, but it also means nothing in this repository has proven that the arm64e series covers every board need myron has.",
+    "how_to_resolve": "Diff the two series; if a hunk in patches/xnu/series has no counterpart in the arm64e series, port that hunk alone into patches/xnu26/."
+  },
+  {
+    "field": "kernel.prelink.tool",
+    "status": "SCOPED",
+    "detail": "Replaced the per-kernelcache wrapper scripts/emit-prelink-myron-ios16.py with the kit's own kits/XnuPrelink/emit_prelink.py. The wrapper existed only to pin a Libm coefficient pool measured out of the 20H392 image; the 23F84 image has not been scanned, so a wrapper would have to carry 20H392 values that do not belong to it.",
+    "how_to_resolve": "If prelink trips instruction_inventory on this kernelcache's Libm segment, scan it with work/scan_prelink_inline_data.py and pin the ranges the same way the iOS 16 wrapper did."
+  },
+  {
+    "field": "soc_source",
+    "status": "SCOPED",
+    "detail": "Unchanged from the iOS 16 skeleton: UniXNU-sm8550-common is pinned because its register map matches SM8650 for every resource this port drives, and no UniXNU-sm8850-common exists. On the arm64e target the SoC series is now read from that repository's patches/xnu-12377/ rather than patches/xnu/, which is what the upstream sheng board does for the same layout.",
+    "how_to_resolve": "Publish UniXNU-sm8850-common, or verify each override in dts/ and configs/ individually."
+  },
+  {
+    "field": "firmware.preflight",
+    "status": "OPEN",
+    "detail": "check-nx769j-firmware.py is still board specific and still named for the NX769J.",
+    "how_to_resolve": "Port to scripts/check-myron-firmware.py."
+  },
+  {
+    "field": "payload.adt.unique_chip_id",
+    "status": "OPEN",
+    "detail": "Per-device seed, intentionally not stored in the repository.",
+    "how_to_resolve": "UNIXNU_UNIQUE_CHIP_ID secret already exists in xl8757/unixnu-myron-build."
+  },
+  {
+    "field": "payload Data seed / owner UUIDs",
+    "status": "OPEN",
+    "detail": "No Data seed generated for 23F84 yet. The iOS 16 seed was built by .github/workflows/data-seed.yml from the 20F66 image and its build-data-seed.py hash-gates on that image.",
+    "how_to_resolve": "Re-run the macOS data-seed workflow with the 23F84 restore image and wire CONFIG_XNU_OWNER_* to the resulting UUIDs."
+  },
+  {
+    "field": "payload.panic_screen",
+    "status": "OPEN",
+    "detail": "Still disabled, for the reason recorded on the iOS 16 target: --panic-screen needs Mu-Silicium SiliciumPkg/Library/FrameBufferSerialPortLib/Font.h and no public checkout supplies it. Unchanged by this migration.",
+    "how_to_resolve": "Wire --uefi to a full Mu-Silicium checkout and re-enable."
+  },
+  {
+    "field": "device_tree.memory_and_timebase",
+    "status": "VERIFIED",
+    "detail": "Unchanged by this migration and still holding: work/dtb_to_dts.py replaces the ABL placeholder /memory reg with the first DRAM bank (0x80000000+0x80000000) and adds /cpus timebase-frequency. CI run 43695710924 passed the DRAM check.",
+    "evidence": "dts/myron-handoff.dts carries the values; board.toml [payload] dram_size and [device_tree] source are unchanged."
+  },
+  {
+    "field": "device_tree.arm_io",
+    "status": "VERIFIED",
+    "detail": "Unchanged: the handoff tree carries the intc (arm,gic-v3, dist 0x17000000 + redist 0x17080000) and ufshc children the ADT needs.",
+    "evidence": "work/check_handoff_dtb.py compiles the DTS in-process and produces a 12,224-byte ADT; the ADT does not depend on the XNU version."
+  },
+  {
+    "field": "stage.firmware",
+    "status": "VERIFIED",
+    "detail": "myron-uefi run 43711284872 published SILICIUM_UEFI.fd 8,388,608 B. The firmware volume does not depend on the OS profile, so the iOS 26 target reuses it unchanged.",
+    "evidence": "Release fd-20261115-120153-2fda1c2, sha256 6dc6760fd9fb0a5e27e3ad7056015d82c8d07686bf8815bb529719e922651f59."
+  },
+  {
+    "field": "stage.kernel",
+    "status": "OPEN",
+    "detail": "Nothing has built XNU 12377 for this board. The iOS 16 kernel built and linked (run 43688728338), but that was xnu-8796 with the device-local rebase. The arm64e series has never been resolved for myron.",
+    "how_to_resolve": "Run ./unixnu build kernel against this repository once the USB dual-system partition exists, and record the first blocking failure."
+  }
+]
