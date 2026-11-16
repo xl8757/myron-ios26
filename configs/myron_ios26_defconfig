@@ -64,6 +64,29 @@ CONFIG_XNU_KERNEL_CHAINED_FIXUPS=y
 CONFIG_XNU_NATIVE_UFS=y
 CONFIG_XNU_NATIVE_VIRTIO_BLOCK=y
 
+# NATIVE_AES is required by NATIVE_VIRTIO_BLOCK, and it is not optional.
+# scripts/build-xnu-4k-baseline.sh rejects the build otherwise:
+#   if XNU_NATIVE_VIRTIO_BLOCK=1 and XNU_NATIVE_AES!=1 -> exit 1
+# No profile fragment supplies NATIVE_AES: profiles/arch/arm64e/configs/
+# common.config has seven switches and AES is not one of them, and
+# sm8550.config is a single NATIVE_ADRENO=y line. The switch therefore has to
+# be set here or VIRTIO_BLOCK has to be turned off; the pair is not
+# independent.
+#
+# NATIVE_AES in turn has its own precondition:
+#   NATIVE_AES=1 requires XNU_CRYPTO_BOOTSTRAP=prelinked AND
+#   XNU_SOURCE_CORECRYPTO14=1
+# SOURCE_CORECRYPTO14 comes from the arm64e arch fragment and
+# CRYPTO_BOOTSTRAP is inherited as "prelinked" from os:configs/ios.config, so
+# both are satisfied without a further override here. That is why this port
+# cannot follow UniXNU-sheng's "source" bootstrap: sheng sets neither
+# NATIVE_AES nor VIRTIO_BLOCK, while this board needs the virtio transport.
+#
+# PENDING: whether the prelinked crypto closure this now selects is actually
+# complete for myron is unverified - it is the same closure the iOS 16 port
+# never reached either. Expect the next failure, if any, in crypto bring-up.
+CONFIG_XNU_NATIVE_AES=y
+
 # Two archives the link needs but that no config flag pulls in on its own.
 # ShengUfs subclasses IOBlockStorageDevice, which lives in the prelinked
 # IOStorageFamily kext: compiling the class in as well registers it twice and

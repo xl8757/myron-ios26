@@ -288,6 +288,7 @@ jobs:
             XNU_CRYPTO_BOOTSTRAP=prelinked \
             XNU_NATIVE_UFS=y \
             XNU_NATIVE_VIRTIO_BLOCK=y \
+            XNU_NATIVE_AES=y \
             XNU_NATIVE_ADRENO=n \
             XNU_NATIVE_LEGACY_DISPLAY=n \
             XNU_NATIVE_MOBILE_DISPLAY=n \
