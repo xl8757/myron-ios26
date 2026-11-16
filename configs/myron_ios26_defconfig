@@ -59,6 +59,25 @@ CONFIG_XNU_KERNEL_CHAINED_FIXUPS=y
 # PENDING: if the virtio transport is ever needed, the fix belongs upstream -
 # either attach the crypto archive in the bootstrap pass too, or guard OSKext's
 # references with the same -U that the prng object gets.
+# The signed root-policy tables are handed to the kernel through the userdata
+# image rather than carried in the boot image. build-sheng-source-storage.py
+# explains why in its own comment: a bring-up image can carry one policy,
+# because the boot image has to stay under the 192 MiB fastboot limit and the
+# second table does not fit yet. With this set, only the 544-byte signed header
+# goes into the boot image and NativeUfs reads "<window>.vroot" from the root
+# image, checking it against that header.
+#
+# The alternative - leaving it unset - makes the script read a full manifest.bin
+# for each window, and those are local inputs of the userdata image that this
+# repository does not ship. UniXNU-sheng ships only manifest.header.bin for its
+# 26 profile and sets this switch only in its 27 and macOS configs, so its 26
+# configuration cannot pass this step either; that is an upstream gap, not
+# something to work around here.
+CONFIG_XNU_SOURCE_STORAGE_TABLES="userdata"
+
+# ShengUfs is driven through the source storage adapter, which is what
+# registers the UFS window bindings and the verified-root anchor.
+CONFIG_XNU_SOURCE_STORAGE=y
 CONFIG_XNU_NATIVE_UFS=y
 CONFIG_XNU_NATIVE_VIRTIO_BLOCK=n
 CONFIG_XNU_NATIVE_AES=n
