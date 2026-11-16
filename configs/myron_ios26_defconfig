@@ -87,6 +87,31 @@ CONFIG_XNU_NATIVE_VIRTIO_BLOCK=y
 # never reached either. Expect the next failure, if any, in crypto bring-up.
 CONFIG_XNU_NATIVE_AES=y
 
+# The switches only add the IOKit personality-table entries (KernelConfigTables
+# gains 'IOClass' = NativeAES / NativeVirtioBlock). The classes themselves are
+# C++ code compiled into per-component archives, and nothing pulls those
+# archives onto the link line by itself. Without the two variables below the
+# link fails with
+#   Undefined symbols for architecture arm64e:
+#     "_source_corecrypto14_original"
+#     "_source_corecrypto14_start_once"
+# plus the NativeAES/NativeVirtioBlock class symbols.
+#
+# The crypto pair is the confusing part and worth spelling out: they are
+# declared in osfmk/prng/prng_random.c under #if defined(XNU_SOURCE_CORECRYPTO14),
+# and in prelinked mode build-xnu-4k-baseline.sh compiles THAT ONE OBJECT with
+# -UXNU_SOURCE_CORECRYPTO14, so the definitions vanish. OSKext.cpp keeps the
+# same #if but is not built with the -U, so it still references them. The
+# archives are what satisfy the reference.
+#
+# Compare UniXNU-Pagani_SM8750's oneplus13t_defconfig, the closest working
+# board (SM8750, prelinked, AES and virtio both on): it carries the same four
+# archive variables. SoftwareAES is the current name for the component whose
+# runtime class is NativeAES and whose legacy output was libNativeAES.a.
+CONFIG_XNU_NATIVE_AES_ARCHIVE="{tree}/build/software-aes/libSoftwareAES.a"
+CONFIG_XNU_NATIVE_VIRTIO_BLOCK_ARCHIVE="{tree}/build/virtio-mmio-block/libVirtioMmioBlock.a"
+CONFIG_XNU_NATIVE_UFS_ARCHIVE="{tree}/build/sheng-ufs/libShengUfs.a"
+
 # Two archives the link needs but that no config flag pulls in on its own.
 # ShengUfs subclasses IOBlockStorageDevice, which lives in the prelinked
 # IOStorageFamily kext: compiling the class in as well registers it twice and
