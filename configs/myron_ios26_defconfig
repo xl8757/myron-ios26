@@ -62,7 +62,7 @@ CONFIG_XNU_KERNEL_CHAINED_FIXUPS=y
 # publishes its request transport. On this target UFS is the only durable store:
 # the OS and SystemOS windows and the Data region all live on it.
 CONFIG_XNU_NATIVE_UFS=y
-CONFIG_XNU_NATIVE_VIRTIO_BLOCK=y
+CONFIG_XNU_NATIVE_VIRTIO_BLOCK=n
 
 # NATIVE_AES is required by NATIVE_VIRTIO_BLOCK, and it is not optional.
 # scripts/build-xnu-4k-baseline.sh rejects the build otherwise:
@@ -85,7 +85,7 @@ CONFIG_XNU_NATIVE_VIRTIO_BLOCK=y
 # PENDING: whether the prelinked crypto closure this now selects is actually
 # complete for myron is unverified - it is the same closure the iOS 16 port
 # never reached either. Expect the next failure, if any, in crypto bring-up.
-CONFIG_XNU_NATIVE_AES=y
+CONFIG_XNU_NATIVE_AES=n
 
 # The switches only add the IOKit personality-table entries (KernelConfigTables
 # gains 'IOClass' = NativeAES / NativeVirtioBlock). The classes themselves are
@@ -108,8 +108,6 @@ CONFIG_XNU_NATIVE_AES=y
 # board (SM8750, prelinked, AES and virtio both on): it carries the same four
 # archive variables. SoftwareAES is the current name for the component whose
 # runtime class is NativeAES and whose legacy output was libNativeAES.a.
-CONFIG_XNU_NATIVE_AES_ARCHIVE="{tree}/build/software-aes/libSoftwareAES.a"
-CONFIG_XNU_NATIVE_VIRTIO_BLOCK_ARCHIVE="{tree}/build/virtio-mmio-block/libVirtioMmioBlock.a"
 CONFIG_XNU_NATIVE_UFS_ARCHIVE="{tree}/build/sheng-ufs/libShengUfs.a"
 
 # Two archives the link needs but that no config flag pulls in on its own.

@@ -285,10 +285,10 @@ jobs:
             XNU_NATIVE_ARCH_TIMER=y \
             XNU_NATIVE_PAN=y \
             XNU_KERNEL_CHAINED_FIXUPS=y \
-            XNU_CRYPTO_BOOTSTRAP=prelinked \
+            XNU_CRYPTO_BOOTSTRAP=source \
             XNU_NATIVE_UFS=y \
-            XNU_NATIVE_VIRTIO_BLOCK=y \
-            XNU_NATIVE_AES=y \
+            XNU_NATIVE_VIRTIO_BLOCK=n \
+            XNU_NATIVE_AES=n \
             XNU_NATIVE_ADRENO=n \
             XNU_NATIVE_LEGACY_DISPLAY=n \
             XNU_NATIVE_MOBILE_DISPLAY=n \
