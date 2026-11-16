@@ -632,6 +632,39 @@ jobs:
           PY
           grep -n "DARWIN_TRIPLE'\|UNIXNU_SDK_VERSION'" UniXNU/scripts/unixnu/kernel.py
 
+      # scripts/build-sheng-source-storage.py calls
+      #   headers.prepare(storage, '7edb88fbae296fb7c8ce2f64e115e116e566d51c', ...)
+      # with a hardcoded commit, while scripts/prepare-storage-headers.py defines
+      #   LEGACY_REVISION = 'e45fbe30a7879e0b16e26dddb78538f1b00e0bff'
+      # and feeds.toml pins IOStorageFamily to that same e45fbe30. The literal in
+      # the caller is a stale UniXNU-sheng pin, and because it is passed as an
+      # argument it also defeats the script's own
+      # UNIXNU_IOSTORAGEFAMILY_COMMIT override. The result is
+      #   feeds/IOStorageFamily-67f9003c: expected full commit 7edb88fb..., found e45fbe30...
+      # which is the check complaining about a value the repository never chose.
+      #
+      # Pass the module's own constant instead, so the caller cannot disagree with
+      # the module it is calling. If upstream ever repins IOStorageFamily, both
+      # move together.
+      - name: Let the storage adapter use the pinned headers revision
+        run: |
+          python3 - <<'PY'
+          import pathlib
+          import re
+
+          path = pathlib.Path('UniXNU/scripts/build-sheng-source-storage.py')
+          text = path.read_text(encoding='utf-8')
+          stale = "headers.prepare(storage, '7edb88fbae296fb7c8ce2f64e115e116e566d51c', out / 'headers')"
+          fixed = "headers.prepare(storage, headers.LEGACY_REVISION, out / 'headers')"
+          if fixed in text:
+              print('already patched')
+          else:
+              assert stale in text, 'the storage adapter call changed upstream'
+              path.write_text(text.replace(stale, fixed), encoding='utf-8')
+              print('storage adapter now uses LEGACY_REVISION')
+          PY
+          grep -n "headers.prepare(storage" UniXNU/scripts/build-sheng-source-storage.py
+
       - name: Fetch, configure and assemble
         working-directory: UniXNU
         run: |
