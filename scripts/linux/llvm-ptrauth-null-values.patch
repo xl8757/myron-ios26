@@ -27,7 +27,7 @@ index 1d3789a..216718b 100644
      return;
    }
 diff --git a/clang/lib/Sema/SemaType.cpp b/clang/lib/Sema/SemaType.cpp
-index 9de4f12..d04fce5 100644
+index 9de4f12..e168218 100644
 --- a/clang/lib/Sema/SemaType.cpp
 +++ b/clang/lib/Sema/SemaType.cpp
 @@ -8659,13 +8659,26 @@ static void HandleNeonVectorTypeAttr(QualType &CurType, const ParsedAttr &Attr,
@@ -49,8 +49,8 @@ index 9de4f12..d04fce5 100644
 +  if (Attr.getNumArgs() >= 4) {
 +    StringLiteral *NullArg = dyn_cast<StringLiteral>(Attr.getArgAsExpr(3));
 +    if (!NullArg || NullArg->getString() != "authenticates-null-values") {
-+      S.Diag(Attr.getArgAsExpr(3)->getBeginLoc(),
-+             diag::err_ptrauth_qualifier_bad_arg_count);
++      S.Diag(Attr.getLoc(), diag::err_attribute_wrong_number_arguments)
++          << Attr << 4;
 +      Attr.setInvalid();
 +      return;
 +    }
