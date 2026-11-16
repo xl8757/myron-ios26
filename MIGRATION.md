@@ -85,6 +85,55 @@ Two more defects surfaced during that work, neither of them in this repository:
 false for a junction, and `_link` cannot remove a junction with `unlink`. Both
 are consequences of the same Windows limitation.
 
+### CI
+
+`.github/workflows/build.yml` was retargeted so the same resolution runs on a
+Linux runner. No job touches the device, writes a partition, or needs Apple's
+image.
+
+| Job | What it now does for this board |
+| --- | --- |
+| `validate` | unchanged mechanics; `porting.toml` identity retargeted to match `board.toml` so `check_identity` passes |
+| `device-tree` | compiles `dts/myron.dts` and `dts/myron-handoff.dts`, asserts the handoff tree carries `unixnu,adt-name`, GICv3 and UFS |
+| `resolve` | installs the OS profile, fetches, defconfigs, assembles the tree, prints the resolved profiles/content/patch order, checks the merged `.config`, checks the patch order |
+| `partition-safety` | unchanged; it only exercises the UniXNU dual-system tooling and never touches a board |
+| `kernel` | targets `xnu-12377` and `myron_ios26_defconfig`; treats the missing 23F84 image as the expected stop |
+
+Four checks were rewritten rather than renamed, because the iOS 16 versions
+asserted things that are no longer true:
+
+1. **The merged-config list expected `XNU_NATIVE_AES=y`.** No fragment on this
+   target sets it — `arm64e/configs/common.config` has seven switches and none is
+   AES, and `sm8550.config` is one line (`NATIVE_ADRENO=y`). The inherited check
+   would have failed for a switch nothing sets. AES arrives through the
+   `SoftwareAES` component, not a config choice. Removed.
+2. **It also expected `XNU_NATIVE_PAC`** in the earlier draft of this migration.
+   PAC is unconditional in `native-pac-keys.patch`; there is no switch. Replaced
+   with the switches that actually resolve, and `NATIVE_PAN` added because the
+   arch fragment really does set it.
+3. **The patch-order check asserted the resolved order equals
+   `patches/xnu/series`.** That was true when one file was the whole order. It is
+   now four series concatenated, and `patches/xnu/series` is the retired iOS 16
+   rebase. The check now asserts the shape (first `bcm2837-machine-config.patch`,
+   last `zzz-boot-progress.patch`), the load-bearing patches, `>= 60` shared
+   entries and exactly `2` SoC entries, and that nothing resolves out of the
+   retired `patches/xnu/` directory.
+4. **An earlier attempt detected the retired series by file name and was
+   wrong.** The two series share about 50 names (`native-arm-pan.patch` and
+   friends) with different contents — the device copies are rebased onto
+   xnu-8796, the shared ones onto xnu-12377. Comparing names would either miss a
+   real double-application or flag a harmless collision, so detection is by the
+   directory each entry resolves from.
+
+`unixnu.lock` carried the xnu-8796 commit. It now carries the `xnu_revision` the
+OS profile pins (`ac9718fb…`), which is what `unixnu fetch` would write. The
+other lock entries are kept: they are UniXNU's global feed pins and pruning them
+here would only invite drift.
+
+Every expected value in the merged-config check was re-derived from the fragment
+that actually supplies it and then verified with `scripts/check-merged-config.py`
+against a config assembled from the real fragments: 16 values match.
+
 Two defects were found by running it, both now fixed:
 
 1. **`soc:patches/xnu-12377/series` does not exist.** The pinned commit
