@@ -586,6 +586,52 @@ jobs:
           PY
           grep -n 'Wno-error=overriding-option' UniXNU/scripts/build-arm-driver.py
 
+      # linux_env() in scripts/unixnu/kernel.py hardcodes the Linux cross target
+      # to arm64 / iOS 17.0:
+      #     'UNIXNU_SDK_VERSION': '17.0',
+      #     'DARWIN_TRIPLE': 'arm64-apple-ios17.0',
+      # That value reaches scripts/linux/clang, which prepends `-target
+      # $DARWIN_TRIPLE` to every invocation - including the archive builders,
+      # which replay per-object recipes out of the kernel build. The kernel
+      # itself overrides the version with -miphoneos-version-min, but those
+      # replays do not, so their objects are stamped for iOS 17.0 while the
+      # kernel audit (scripts/kernel_target.py, driven by the profile's
+      # ios_version) expects iOS 26.0 and refuses them:
+      #   ArmDTPlatform: deployment (2, 1114112), expected (2, 1703936)
+      # 1114112 is 17.0, 1703936 is 26.0.
+      #
+      # The two values are derived from the selected profile rather than
+      # hardcoded, so this board builds for the platform it targets. The arch
+      # part matters too: arm64 (not arm64e) in the triple makes clang drop the
+      # pointer-authentication ABI the arm64e series relies on.
+      - name: Point the cross target at the selected profile
+        run: |
+          python3 - <<'PY'
+          import pathlib
+          import tomllib
+
+          board = tomllib.load(open('myron-ios26/board.toml', 'rb'))
+          profile_name = board['board']['os_profile']
+          profile = tomllib.load(open(f'UniXNU/profiles/os/{profile_name}/profile.toml', 'rb'))
+          arch = profile['os'].get('arch', 'arm64')
+          ios_version = profile['os']['ios_version']
+
+          path = pathlib.Path('UniXNU/scripts/unixnu/kernel.py')
+          text = path.read_text(encoding='utf-8')
+          old_sdk = "            'UNIXNU_SDKROOT': str(fakeroot), 'UNIXNU_SDK_VERSION': '17.0',"
+          old_triple = "'CROSS_CLANG': str(toolchain / 'llvm/bin/clang'), 'DARWIN_TRIPLE': 'arm64-apple-ios17.0',"
+          assert old_sdk in text, 'linux_env SDK line changed upstream'
+          assert old_triple in text, 'linux_env triple line changed upstream'
+          new_sdk = ("            'UNIXNU_SDKROOT': str(fakeroot), "
+                     f"'UNIXNU_SDK_VERSION': '{ios_version}',")
+          new_triple = ("'CROSS_CLANG': str(toolchain / 'llvm/bin/clang'), "
+                        f"'DARWIN_TRIPLE': '{arch}-apple-ios{ios_version}',")
+          text = text.replace(old_sdk, new_sdk).replace(old_triple, new_triple)
+          path.write_text(text, encoding='utf-8')
+          print(f'cross target -> {arch}-apple-ios{ios_version}')
+          PY
+          grep -n "DARWIN_TRIPLE'\|UNIXNU_SDK_VERSION'" UniXNU/scripts/unixnu/kernel.py
+
       - name: Fetch, configure and assemble
         working-directory: UniXNU
         run: |
