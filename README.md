@@ -1,4 +1,4 @@
-# myron — iOS 26 on the Redmi K90 Pro Max
+# myron - iOS 26 on the Redmi K90 Pro Max
 
 UniXNU device repository for the **Redmi K90 Pro Max** (codename **myron**), on
 the Qualcomm **SM8850 "Canoe"** (Snapdragon 8 Elite Gen 5), targeting
@@ -14,8 +14,8 @@ firmware and partition policy. Shared code lives in
 | Board | Redmi K90 Pro Max |
 | Codename | `myron` |
 | SoC | Qualcomm SM8850 "Canoe", Adreno 840, `qcom,chipid=0x44050A01` |
-| OS profile | `ios-26.5.2-23F84` — iOS 26.5.2, Darwin 25.5.0, XNU 12377.121.6, arm64e |
-| Identity | iPad17,3 (`iPad17,3` / J820AP) forged by the ADT — see the caveat below |
+| OS profile | `ios-26.5.2-23F84` - iOS 26.5.2, Darwin 25.5.0, XNU 12377.121.6, arm64e |
+| Identity | iPad17,3 (`iPad17,3` / J820AP) forged by the ADT - see the caveat below |
 | Display | 1200x2608, stride 4800 |
 | Touch | FocalTech FT3683, QUP4 SE0, `spi19.0` |
 | Storage | UFS, `ufshc@1d84000`, userdata `sda34` |
@@ -63,14 +63,14 @@ measured pins, not an edit to this one.
 
 Listed by likelihood, from `MIGRATION.md`:
 
-1. `kernelcache_sha256` mismatch — the pin is inherited from the iPadOS 26
+1. `kernelcache_sha256` mismatch - the pin is inherited from the iPadOS 26
    profile, not measured here. The build fails closed with a clear message.
-2. `roots` mismatch — any bundle identifier absent from the image fails prelink.
-3. Storage bindings — `scripts/prelink-storage-bindings.json` holds 190
+2. `roots` mismatch - any bundle identifier absent from the image fails prelink.
+3. Storage bindings - `scripts/prelink-storage-bindings.json` holds 190
    IOBlockStorageDevice slots measured out of the **20H392** kernelcache. They
    have not been re-measured for 23F84, so this fails at link or at first storage
    access rather than at build time.
-4. The device patch series is empty — if myron needs something the shared arm64e
+4. The device patch series is empty - if myron needs something the shared arm64e
    series does not carry, it appears as a runtime panic, not a patch failure.
 
 ## The partition this board writes to

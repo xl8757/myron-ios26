@@ -38,11 +38,11 @@ The inputs they read are pinned elsewhere and unchanged by this file:
 | Input | Pin |
 | --- | --- |
 | XNU | `xnu-8796.101.5` at `aca3beaa3dfbd42498b42c5e5ce20a938e6554e5` |
-| Restore image | `iPhone10,3,iPhone10,6_16.5_20F66_Restore.ipsw`, sha256 `c1091c40…7d52f2` |
-| OS member | `096-04088-077.dmg`, sha256 `64354ba3…a3f290` |
+| Restore image | `iPhone10,3,iPhone10,6_16.5_20F66_Restore.ipsw`, sha256 `c1091c40...7d52f2` |
+| OS member | `096-04088-077.dmg`, sha256 `64354ba3...a3f290` |
 | SoC source | `UniXNU-sm8550-common` at `23b2049fcd9e30356161def84231334fb55ecca9` |
 | Mu-Silicium | `UniXNU/uefi-sheng` branch `sheng`, `nx769jPkg` staged from [`firmware/`](../firmware) |
-| Vendor DXE drivers | 52 modules from `uefi.img`, sha256 `862c3c1a…900e804`, each pinned in [`proprietary-files.txt`](../proprietary-files.txt) |
+| Vendor DXE drivers | 52 modules from `uefi.img`, sha256 `862c3c1a...900e804`, each pinned in [`proprietary-files.txt`](../proprietary-files.txt) |
 
 ## Resolution
 
@@ -88,8 +88,8 @@ shows it.
 | Output | `out/nx769j/ios-16.5-20F66/nx769j/userdata/userdata-root.img` |
 | Size | 8357150720 bytes (7.78 GiB) in a partition of 494387671040 bytes |
 | SHA-256 | `818e4e37bc9061ac8f5a2103234adb1c1b945fa1f2f4255ac148731b9ebf2631` |
-| OS window | `096-04088-077.dmg`, 5628790272 bytes at `0x100000`, sha256 `484abb49…2021c8` |
-| SystemOS window | `096-04666-078.dmg`, 2726297600 bytes at `0x14fa00000`, sha256 `2279bf44…afdd3` |
+| OS window | `096-04088-077.dmg`, 5628790272 bytes at `0x100000`, sha256 `484abb49...2021c8` |
+| SystemOS window | `096-04666-078.dmg`, 2726297600 bytes at `0x14fa00000`, sha256 `2279bf44...afdd3` |
 
 This image is what `scripts/extract-root-volume-uuid.py` reads, and it is
 byte-identical across runs: the two windows are copies of pinned members and the
@@ -151,11 +151,11 @@ Two of the outputs are not byte-reproducible and should not be expected to be:
 | Output | Reproducible | Why |
 | --- | --- | --- |
 | `userdata-root.img` | yes | copies of pinned members in a fixed header |
-| `SILICIUM_UEFI.fd` | **no** | two builds from identical sources gave `f5c3bc8f…` and `b0690638…` |
+| `SILICIUM_UEFI.fd` | **no** | two builds from identical sources gave `f5c3bc8f...` and `b0690638...` |
 | `payload.img`, `boot.img` | **no** | the ADT carries `random-seed` of 64 random bytes, and it carries the FD |
 
-The firmware is supposed to be reproducible — `firmware.py` pins
-`SOURCE_DATE_EPOCH` to the Mu-Silicium commit time — so the two differing FDs
+The firmware is supposed to be reproducible - `firmware.py` pins
+`SOURCE_DATE_EPOCH` to the Mu-Silicium commit time - so the two differing FDs
 are an open question rather than an accepted property. The two runs were both
 incremental against a reused `Build/` directory, which is the first thing to
 rule out: build twice from a clean `Build/` and compare.

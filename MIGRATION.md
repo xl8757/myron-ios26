@@ -13,7 +13,7 @@ UniXNU upstream already ships everything an arm64e iOS 26 target needs:
 
 | Piece | Where | State |
 | --- | --- | --- |
-| `profiles/arch/arm64e/` | UniXNU | 4 KiB pages, 68-patch series against xnu-12377, PAC keys |
+| `profiles/arch/arm64e/` | UniXNU | 4 KiB pages, 69-entry series against xnu-12377, PAC keys |
 | `patches/xnu-12377/` | UniXNU | the series itself, including `native-pac-keys.patch`, `native-pac-arm64-user-jop.patch` |
 | `profiles/os/ipados-26.5.2-23F84/` | UniXNU | the OS profile for this exact kernel |
 | `patches/xnu-12377/` | UniXNU-sm8550-common | the SoC layer |
@@ -22,10 +22,10 @@ UniXNU upstream already ships everything an arm64e iOS 26 target needs:
 That last row is the important one. It means the arm64e series is not a pile of
 untested patches: one board in the ecosystem already pairs this profile with
 this SoC family and builds. The migration is therefore **reuse the arch layer,
-do not port the old one** — not "rebase 65 hunks onto a new XNU".
+do not port the old one** - not "rebase 65 hunks onto a new XNU".
 
-The alternative — porting the public `hakios-arm64e-dada` tree, which is the iOS
-26 port to a Snapdragon 8 Elite phone — was rejected for two concrete reasons,
+The alternative - porting the public `hakios-arm64e-dada` tree, which is the iOS
+26 port to a Snapdragon 8 Elite phone - was rejected for two concrete reasons,
 both recorded in that project's own issue tracker:
 
 - The system-image tooling is not published. `ios26/fetch.sh`,
@@ -40,8 +40,8 @@ both recorded in that project's own issue tracker:
   the arm64e series exists to prevent, and UniXNU's version is the one with a
   board that boots.
 
-So this port borrows the *approach* from dada — arm64e natively, Metal through a
-translation layer, iOS 26 user space — and takes the *code* from UniXNU.
+So this port borrows the *approach* from dada - arm64e natively, Metal through a
+translation layer, iOS 26 user space - and takes the *code* from UniXNU.
 
 ## What changed
 
@@ -62,12 +62,12 @@ What that proves, and what it does not:
 
 - **Proved:** the four profiles load (`arch`, `soc`, `os`, `device`); the OS
   profile's `arch = "arm64e"` selects `profiles/arch/arm64e`; 11 components
-  resolve from the catalog; the patch order resolves to 72 files — 70 from the
-  shared arm64e/arch and OS series, 2 from the SoC series, 0 from the device
+  resolve from the catalog; the patch order resolves to 72 files - 70 from the
+  shared arm64e/arch and OS series (69 arch + 1 os), 2 from the SoC series, 0 from the device
   series; the merged `.config` parses to 20 distinct switches with the intended
   effective values; and the build tree assembles with 9 drivers, 3 kits
   (including the device package as `kits/myron`), 5 patch roots and 62 scripts.
-- **Not proved:** nothing compiled. `build kernel` is Linux/macOS only — it
+- **Not proved:** nothing compiled. `build kernel` is Linux/macOS only - it
   refuses to start on Windows, and on Linux it needs the Xcode-derived toolchain
   from `scripts/linux/setup-toolchain.py` plus a 23F84 kernelcache. Running it
   is the next step, and it needs a Linux host or CI, not this machine.
@@ -76,7 +76,7 @@ Note on how the tree was assembled here: `unixnu tree` creates the tree out of
 symlinks, and Windows without `SeCreateSymbolicLink` cannot make them. A throwaway
 copy of the driver in this workspace was patched to fall back to directory
 junctions (`mklink /J`) and hard links (`mklink /H`). **That patch is not part of
-this repository and is not proposed as a change to UniXNU** — it exists only so
+this repository and is not proposed as a change to UniXNU** - it exists only so
 the resolution steps above could be exercised on this host. Upstream's symlink
 design is correct for its own targets.
 
@@ -103,7 +103,7 @@ Four checks were rewritten rather than renamed, because the iOS 16 versions
 asserted things that are no longer true:
 
 1. **The merged-config list expected `XNU_NATIVE_AES=y`.** No fragment on this
-   target sets it — `arm64e/configs/common.config` has seven switches and none is
+   target sets it - `arm64e/configs/common.config` has seven switches and none is
    AES, and `sm8550.config` is one line (`NATIVE_ADRENO=y`). The inherited check
    would have failed for a switch nothing sets. AES arrives through the
    `SoftwareAES` component, not a config choice. Removed.
@@ -120,13 +120,13 @@ asserted things that are no longer true:
    retired `patches/xnu/` directory.
 4. **An earlier attempt detected the retired series by file name and was
    wrong.** The two series share about 50 names (`native-arm-pan.patch` and
-   friends) with different contents — the device copies are rebased onto
+   friends) with different contents - the device copies are rebased onto
    xnu-8796, the shared ones onto xnu-12377. Comparing names would either miss a
    real double-application or flag a harmless collision, so detection is by the
    directory each entry resolves from.
 
 `unixnu.lock` carried the xnu-8796 commit. It now carries the `xnu_revision` the
-OS profile pins (`ac9718fb…`), which is what `unixnu fetch` would write. The
+OS profile pins (`ac9718fb...`), which is what `unixnu fetch` would write. The
 other lock entries are kept: they are UniXNU's global feed pins and pruning them
 here would only invite drift.
 
@@ -152,8 +152,8 @@ Two defects were found by running it, both now fixed:
 3. **Duplicate switches in `.config`.** `cmd_defconfig` concatenates fragments
    and does not deduplicate; `parse_config` takes the last value. An earlier
    draft set `XNU_BUILD_ARCHIVES=y` twice. Removed. `XNU_NATIVE_ADRENO` still
-   appears twice by design — the device line overrides the SoC's `=y` with `=n`
-   — and is now commented as such.
+   appears twice by design - the device line overrides the SoC's `=y` with `=n`
+   - and is now commented as such.
 
 ### `board.toml`
 
@@ -167,7 +167,7 @@ Two defects were found by running it, both now fixed:
 | `[firmware.defines] BUILDID_STRING` | `myron-ios16-research` | `myron-ios26-research` | label |
 | `[payload.adt] chip_id` | `"207"` | `"8142"` | 0x8142 is iPad17,3; 0x207 was iPhone X |
 | `[payload.adt] ipad_identity` | `false` | `true` | the profile forges an iPad |
-| `[payload.adt] root_match_volume_uuid` | `DADD93F8-…` | `546DFF4A-…` | the old UUID belongs to the 20H392 image |
+| `[payload.adt] root_match_volume_uuid` | `DADD93F8-...` | `546DFF4A-...` | the old UUID belongs to the 20H392 image |
 | `[kernel.prelink]` comments | pointed at the iOS 16 profile | point at the iOS 26 one | accuracy |
 
 Unchanged on purpose: `[userdata]` geometry (the unixnu partition carved
@@ -182,7 +182,7 @@ New. Modelled on `profiles/os/ipados-26.5.2-23F84/profile.toml`, with the
 repository rather than in `profiles/os/`.
 
 Its `patches/xnu/series` has **one** entry, `zzz-boot-progress.patch`, exactly as
-the upstream iPadOS 26 profile does. That is not laziness: the 68 arm64e patches
+the upstream iPadOS 26 profile does. That is not laziness: the 69 arm64e patches
 already come in through `arch:`, and repeating them here would apply them twice.
 
 ### `configs/myron_ios26_defconfig`
@@ -197,7 +197,7 @@ New, derived from the old one with four substantive changes:
 - **`CONFIG_XNU_KERNEL_CHAINED_FIXUPS=y`.** iOS 26 binaries carry chained
   fixups; without it the prelinked kexts and user images cannot be rebound.
 - **`CONFIG_XNU_NATIVE_CS_HASH_CACHE` removed.** That switch does not exist in
-  the 12377 tree — the work lives in `native-4k-signature-hash-cache.patch`
+  the 12377 tree - the work lives in `native-4k-signature-hash-cache.patch`
   instead.
 - **`CONFIG_XNU_BUILD_ARCHIVES=y`** restated at board level, because the archive
   list below it is board-specific.
@@ -223,17 +223,17 @@ menu title.
 ## Identity is not a free parameter
 
 The forged identity moved from **iPhone X (iPhone10,3 / D22AP)** to **iPad17,3
-(J820AP)**. That is a regression in fidelity — this is a phone, and an iPad
-identity means iPad layouts and iPad product keys — and it is still the right
+(J820AP)**. That is a regression in fidelity - this is a phone, and an iPad
+identity means iPad layouts and iPad product keys - and it is still the right
 call, for one reason:
 
 `[kernel.prelink]` pins three values that are properties of **one specific
 kernelcache**, not of the board:
 
-- `kernelcache_sha256` — the build refuses to prelink against any other image;
-- `early_security_init` — an address inside `AppleMobileFileIntegrity`'s
+- `kernelcache_sha256` - the build refuses to prelink against any other image;
+- `early_security_init` - an address inside `AppleMobileFileIntegrity`'s
   `__TEXT_EXEC` in that image;
-- `roots` — 30 bundle identifiers that must all be present in that image's
+- `roots` - 30 bundle identifiers that must all be present in that image's
   `__PRELINK_INFO`.
 
 There is exactly one arm64e iOS 26 kernelcache in this ecosystem whose three
@@ -259,7 +259,7 @@ Ordered by how likely each is to be the first wall:
    build fails closed with a clear message. Fix:
    `scripts/extract-ipsw-pins.py` against a local 23F84 image.
 2. **`roots` mismatch.** Any bundle identifier absent from the image fails
-   prelink. Self-correcting once an image is present — the error names the root.
+   prelink. Self-correcting once an image is present - the error names the root.
 3. **Storage bindings.** `scripts/prelink-storage-bindings.json` holds 190 slots
    measured out of the **20H392** kernelcache. 23F84 has its own layout. This
    fails at link or at first storage access, not at build time, which makes it
@@ -280,8 +280,8 @@ reasons the status columns in `porting.toml` must stay where they are.
   that do have it (`Adreno740` + `AdrenoMetal`) target Adreno 740 on SM8550,
   not the Adreno 840 here. `CONFIG_XNU_NATIVE_ADRENO=n` stays.
 - **No `porting.toml` rewrite.** Its areas still describe the iOS 16 work. They
-  are not wrong about hardware — the SoC, the partition geometry and the device
-  tree are unchanged — but their kernel and payload narratives are now stale.
+  are not wrong about hardware - the SoC, the partition geometry and the device
+  tree are unchanged - but their kernel and payload narratives are now stale.
   Rewriting 85 KB of area records without a build to point at would be
   documentation about nothing.
 - **No attempt to reconcile the two patch series.** Diffing 65 hunks against 68

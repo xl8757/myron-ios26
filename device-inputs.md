@@ -129,7 +129,7 @@ The dump is an **overlay**, applied on top of a base DTB it does not contain: th
 repository has `dtbo.img` and its extracted trees but no `vendor_boot` and no
 base `dtb`. `gunyah_hyp_region`, `gpu_microcode_region` and the vendor
 reservations live in that base. The device's own flash package supplies that
-base — see [Firmware device tree reservations](#fw-dtb) below.
+base - see [Firmware device tree reservations](#fw-dtb) below.
 
 ### Firmware device tree reservations {#fw-dtb}
 
@@ -147,8 +147,8 @@ that the bootloader picks between by `qcom,msm-id`:
 | 5 | Qualcomm Technologies, Inc. PineappleP SoC | `0x241 0x10000` | 36 nodes |
 
 The device's own `qcom,msm-id` (recorded above under
-[Device identity](#device-identity)) is `0x22d00020000, 0x24100020000` — both
-SoC ids at **version `0x20000`** — which matches the two **v2** trees, 2 and 4,
+[Device identity](#device-identity)) is `0x22d00020000, 0x24100020000` - both
+SoC ids at **version `0x20000`** - which matches the two **v2** trees, 2 and 4,
 and rules out the v1 pair. Its model is `Pineapple MTP`, so tree 2
 (`qcom,pineapple`) is the one to hand to `unixnu bootimg --dtb`; tree 4 is the
 alternative if the bootloader turns out to prefer `qcom,pineapplep`.
@@ -166,55 +166,55 @@ each one's model, IDs and reservations. Read-only.
 
 | Node | `label` | Address | Size |
 | --- | --- | --- | --- |
-| `gunyah_hyp_region@80000000` | `—` | `0x80000000` | `0xe00000` |
-| `cpusys_vm_region@80e00000` | `—` | `0x80e00000` | `0x400000` |
-| `xbl_aop_merged_region@81a00000` | `—` | `0x81a00000` | `0x260000` |
-| `aop_cmd_db_region@81c60000` | `—` | `0x81c60000` | `0x20000` |
-| `aop_tme_uefi_merged_region@81c80000` | `—` | `0x81c80000` | `0x74000` |
-| `chipinfo_region@81cf4000` | `—` | `0x81cf4000` | `0x1000` |
-| `smem_region@81d00000` | `—` | `0x81d00000` | `0x200000` |
-| `adsp_mhi_region@81f00000` | `—` | `0x81f00000` | `0x20000` |
-| `pvmfw_region@0x824a0000` | `—` | `0x824a0000` | `0x100000` |
-| `global_sync_region@82600000` | `—` | `0x82600000` | `0x100000` |
-| `tz_stat_region@82700000` | `—` | `0x82700000` | `0x100000` |
-| `qdss_region@82800000` | `—` | `0x82800000` | `0x2000000` |
-| `qlink_logging_region@84800000` | `—` | `0x84800000` | `0x200000` |
-| `mpss_dsm_region@86b00000` | `—` | `0x86b00000` | `0x4900000` |
-| `mpss_dsm_region_2@8b400000` | `—` | `0x8b400000` | `0x800000` |
-| `mpss_region@8bc00000` | `—` | `0x8bc00000` | `0xf400000` |
-| `q6_mpss_dtb_region@9b000000` | `—` | `0x9b000000` | `0x80000` |
-| `ipa_fw_region@9b080000` | `—` | `0x9b080000` | `0x10000` |
-| `ipa_gsi_region@9b090000` | `—` | `0x9b090000` | `0xa000` |
-| `qseecom_region` | `—` | allocated at runtime | — |
-| `qseecom_ta_region` | `—` | allocated at runtime | — |
-| `qmc_dma_region` | `—` | allocated at runtime | — |
-| `non_secure_display_region` | `—` | allocated at runtime | — |
-| `gpu_microcode_region@9b09a000` | `—` | `0x9b09a000` | `0x2000` |
-| `spss_region_region@9b0a0000` | `—` | `0x9b0a0000` | `0x1e0000` |
-| `spu_secure_shared_memory_region@9b280000` | `—` | `0x9b280000` | `0x60000` |
-| `spu_secure_shared_memory_region@9b2e0000` | `—` | `0x9b2e0000` | `0x20000` |
-| `camera_region@9b300000` | `—` | `0x9b300000` | `0x800000` |
-| `video_region@9bb00000` | `—` | `0x9bb00000` | `0x800000` |
-| `cvp_region@9c300000` | `—` | `0x9c300000` | `0x700000` |
-| `cdsp_region@9ca00000` | `—` | `0x9ca00000` | `0x1400000` |
-| `q6_cdsp_dtb_region@9de00000` | `—` | `0x9de00000` | `0x80000` |
-| `q6_adsp_dtb_region@9de80000` | `—` | `0x9de80000` | `0x80000` |
-| `adspslpi_region@9df00000` | `—` | `0x9df00000` | `0x4080000` |
-| `tz_merged_region@d8000000` | `—` | `0xd8000000` | `0x800000` |
-| `hwfence-shmem` | `—` | `0xe6440000` | `0x2dd000` |
-| `vm_comm_mem_region` | `—` | allocated at runtime | — |
-| `trust_ui_vm_region@f3800000` | `—` | `0xf3800000` | `0x4400000` |
-| `oem_vm_region@f7c00000` | `—` | `0xf7c00000` | `0x4c00000` |
-| `llcc_lpi_region@ff800000` | `—` | `0xff800000` | `0x600000` |
-| `va_md_mem_region` | `—` | allocated at runtime | — |
-| `sp_region` | `—` | allocated at runtime | — |
-| `cdsp_eva_region` | `—` | allocated at runtime | — |
-| `adsp_heap_region` | `—` | allocated at runtime | — |
-| `linux,cma` | `—` | allocated at runtime | — |
-| `secure_cdsp_region` | `—` | allocated at runtime | — |
-| `debug_kinfo_region` | `—` | allocated at runtime | — |
-| `ramoops@D7E00000` | `—` | `0xd7e00000` | `0x200000` |
-| `mem_dump_region` | `—` | allocated at runtime | — |
+| `gunyah_hyp_region@80000000` | `-` | `0x80000000` | `0xe00000` |
+| `cpusys_vm_region@80e00000` | `-` | `0x80e00000` | `0x400000` |
+| `xbl_aop_merged_region@81a00000` | `-` | `0x81a00000` | `0x260000` |
+| `aop_cmd_db_region@81c60000` | `-` | `0x81c60000` | `0x20000` |
+| `aop_tme_uefi_merged_region@81c80000` | `-` | `0x81c80000` | `0x74000` |
+| `chipinfo_region@81cf4000` | `-` | `0x81cf4000` | `0x1000` |
+| `smem_region@81d00000` | `-` | `0x81d00000` | `0x200000` |
+| `adsp_mhi_region@81f00000` | `-` | `0x81f00000` | `0x20000` |
+| `pvmfw_region@0x824a0000` | `-` | `0x824a0000` | `0x100000` |
+| `global_sync_region@82600000` | `-` | `0x82600000` | `0x100000` |
+| `tz_stat_region@82700000` | `-` | `0x82700000` | `0x100000` |
+| `qdss_region@82800000` | `-` | `0x82800000` | `0x2000000` |
+| `qlink_logging_region@84800000` | `-` | `0x84800000` | `0x200000` |
+| `mpss_dsm_region@86b00000` | `-` | `0x86b00000` | `0x4900000` |
+| `mpss_dsm_region_2@8b400000` | `-` | `0x8b400000` | `0x800000` |
+| `mpss_region@8bc00000` | `-` | `0x8bc00000` | `0xf400000` |
+| `q6_mpss_dtb_region@9b000000` | `-` | `0x9b000000` | `0x80000` |
+| `ipa_fw_region@9b080000` | `-` | `0x9b080000` | `0x10000` |
+| `ipa_gsi_region@9b090000` | `-` | `0x9b090000` | `0xa000` |
+| `qseecom_region` | `-` | allocated at runtime | - |
+| `qseecom_ta_region` | `-` | allocated at runtime | - |
+| `qmc_dma_region` | `-` | allocated at runtime | - |
+| `non_secure_display_region` | `-` | allocated at runtime | - |
+| `gpu_microcode_region@9b09a000` | `-` | `0x9b09a000` | `0x2000` |
+| `spss_region_region@9b0a0000` | `-` | `0x9b0a0000` | `0x1e0000` |
+| `spu_secure_shared_memory_region@9b280000` | `-` | `0x9b280000` | `0x60000` |
+| `spu_secure_shared_memory_region@9b2e0000` | `-` | `0x9b2e0000` | `0x20000` |
+| `camera_region@9b300000` | `-` | `0x9b300000` | `0x800000` |
+| `video_region@9bb00000` | `-` | `0x9bb00000` | `0x800000` |
+| `cvp_region@9c300000` | `-` | `0x9c300000` | `0x700000` |
+| `cdsp_region@9ca00000` | `-` | `0x9ca00000` | `0x1400000` |
+| `q6_cdsp_dtb_region@9de00000` | `-` | `0x9de00000` | `0x80000` |
+| `q6_adsp_dtb_region@9de80000` | `-` | `0x9de80000` | `0x80000` |
+| `adspslpi_region@9df00000` | `-` | `0x9df00000` | `0x4080000` |
+| `tz_merged_region@d8000000` | `-` | `0xd8000000` | `0x800000` |
+| `hwfence-shmem` | `-` | `0xe6440000` | `0x2dd000` |
+| `vm_comm_mem_region` | `-` | allocated at runtime | - |
+| `trust_ui_vm_region@f3800000` | `-` | `0xf3800000` | `0x4400000` |
+| `oem_vm_region@f7c00000` | `-` | `0xf7c00000` | `0x4c00000` |
+| `llcc_lpi_region@ff800000` | `-` | `0xff800000` | `0x600000` |
+| `va_md_mem_region` | `-` | allocated at runtime | - |
+| `sp_region` | `-` | allocated at runtime | - |
+| `cdsp_eva_region` | `-` | allocated at runtime | - |
+| `adsp_heap_region` | `-` | allocated at runtime | - |
+| `linux,cma` | `-` | allocated at runtime | - |
+| `secure_cdsp_region` | `-` | allocated at runtime | - |
+| `debug_kinfo_region` | `-` | allocated at runtime | - |
+| `ramoops@D7E00000` | `-` | `0xd7e00000` | `0x200000` |
+| `mem_dump_region` | `-` | allocated at runtime | - |
 
 49 nodes, 36 with a fixed address
 
@@ -237,7 +237,7 @@ Cross-checks on the same read:
 
 | Property | Value | |
 | --- | --- | --- |
-| `/sys/devices/soc0/soc_id` | `557` | `0x22d` — matches `qcom,msm-id`, so SM8650 |
+| `/sys/devices/soc0/soc_id` | `557` | `0x22d` - matches `qcom,msm-id`, so SM8650 |
 | `/sys/devices/soc0/machine` | `PINEAPPLE` | |
 | `/sys/devices/soc0/revision` | `2.0` | matches `qcom,msm-id` revision `0x20000` |
 | `qcom,board-id` | `0x00000008_00000000` | board id 8, subtype 0 |

@@ -57,13 +57,19 @@ statements and ordinary punctuation.
   `kernelcache_sha256`, `early_security_init` and `roots`, all three read out of
   one specific kernelcache. Never copy those values between profiles.
 - The arch layer is `arm64e`, not `arm64`. That single field in the OS profile
-  decides which shared patch series is applied (68 patches against xnu-12377)
-  and whether `CONFIG_XNU_NATIVE_PAC` is set. A kernel built without it panics
-  on the first authenticated indirect branch; that is the failure the public
-  dada port reports.
-- The patch order is the four shared series — `arch:`, `soc:`, `os:`, `device:`
-  — matching `UniXNU-sheng`'s arm64e board. The SoC series is read from
-  `patches/xnu-12377/` of `UniXNU-sm8550-common`, not `patches/xnu/`.
+  selects `profiles/arch/arm64e` and with it its 69-entry series against
+  xnu-12377. Note what it does *not* do: there is no `CONFIG_XNU_NATIVE_PAC`
+  switch. Pointer authentication comes in through
+  `patches/xnu-12377/native-pac-keys.patch` and
+  `native-pac-arm64-user-jop.patch`, which are unconditional. A kernel built
+  without the arm64e series panics on the first authenticated indirect branch;
+  that is the failure the public dada port reports.
+- The patch order is the four shared series - `arch:`, `soc:`, `os:`, `device:`.
+  The SoC series is `patches/xnu/series` inside `UniXNU-sm8550-common`, **not**
+  `patches/xnu-12377/`: at the pinned commit `23b2049fcd9e` that directory does
+  not exist. `UniXNU-sheng`'s board.toml names the `xnu-12377` path and would
+  fail to resolve against the same pin. The SoC series holds exactly two
+  patches, `native-smp-secondary.patch` and `sheng-platform-power.patch`.
 - `patches/xnu/series` (65 hunks, rebased onto xnu-8796 for the old iOS 16
   target) is **not** part of that order, and referencing it would apply the same
   changes twice. `patches/xnu26/series` is the device series and is empty. Read

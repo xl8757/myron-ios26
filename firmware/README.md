@@ -43,7 +43,7 @@ so they are extracted onto the build machine rather than committed.
 | File | How to produce it |
 | --- | --- |
 | `Resources/DTBs/nx769j.dtb` | `python3 scripts/extract-firmware-dtb.py --vendor-boot vendor_boot.img --tree 2 -o Resources/DTBs/nx769j.dtb`. Tree 2 is "Pineapple v2 SoC", which this board matches by `qcom,msm-id`; all four Pineapple trees carry the same reservation set, so the memory map does not depend on the choice. |
-| `Binaries/nx769j/QcomPkg/Drivers/…` | `python3 scripts/extract-uefi-drivers.py --image uefi.img --layout <this checkout>`. All 52 modules the platform includes name come out of `uefi.img`, each written with its EDK II INF wrapper and depex. [`proprietary-files.txt`](../proprietary-files.txt) pins the hash of every one. |
+| `Binaries/nx769j/QcomPkg/Drivers/...` | `python3 scripts/extract-uefi-drivers.py --image uefi.img --layout <this checkout>`. All 52 modules the platform includes name come out of `uefi.img`, each written with its EDK II INF wrapper and depex. [`proprietary-files.txt`](../proprietary-files.txt) pins the hash of every one. |
 
 `scripts/check-nx769j-firmware.py` reports exactly which of these are still
 missing and whether they are fatal, and is what `./unixnu build firmware` runs
@@ -85,7 +85,7 @@ what is still open.
 ## The one line that is easy to get wrong
 
 `nx729j.dsc` includes `KailuaPkg/KailuaPkg.dsc.inc`. That is SM8550. NX769J is
-SM8650, whose Mu-Silicium SoC package is **`LanaiPkg`** — named after Qualcomm's
+SM8650, whose Mu-Silicium SoC package is **`LanaiPkg`** - named after Qualcomm's
 platform codename, not the part number. The staged DSC includes `LanaiPkg` and
 sets `SOC_TYPE = 2` (`SM8650-AB`).
 

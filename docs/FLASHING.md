@@ -31,7 +31,7 @@ writes nothing; the step that does write is called out explicitly below.
 | Board hardware values | **filled** | `device-inputs.md`, measured read-only on the device |
 | `uefi-nx769j` firmware package | **built** | `./unixnu build firmware`, `SILICIUM_UEFI.fd` at exactly `0x300000` |
 | Vendor UEFI DXE drivers (52) | **extracted** | `scripts/extract-uefi-drivers.py --layout`, hashes in `proprietary-files.txt` |
-| Firmware DTB | **extracted** | `scripts/extract-firmware-dtb.py --vendor-boot … --tree 2` |
+| Firmware DTB | **extracted** | `scripts/extract-firmware-dtb.py --vendor-boot ... --tree 2` |
 | `payload.adt.root_match_volume_uuid` | **filled** | `scripts/extract-root-volume-uuid.py` reads it out of the OS window |
 | `payload.text_fixups` | **empty** | an honest empty list; add one only when a boot fails on one |
 | `payload.adt.unique_chip_id` | **required on the command line** | the SoC serial, recorded in [`device-inputs.md`](../device-inputs.md#chip-id) |
@@ -96,7 +96,7 @@ Outputs land under `out/nx769j/ios-16.5-20F66/nx769j/`. This repository's
 
 `unixnu bootimg` round-trips the image and fails if any part does not match its
 input, so a successful run is itself the check. It writes `boot.json` beside the
-image, recording the SHA-256 of the FD it packed and of the DTB it appended —
+image, recording the SHA-256 of the FD it packed and of the DTB it appended -
 those two are what tie the image back to the firmware and to the device.
 
 The image contains:

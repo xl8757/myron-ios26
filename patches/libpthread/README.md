@@ -14,8 +14,8 @@ first-wins and iterates the device repository before the UniXNU checkout
 device directory would silently drop the patch that makes kernel addresses
 explicit instead of `NULL`.
 
-The two patches are independent — one touches lines around 900, the other
-around 670 — and both apply strictly in this sorted order onto
+The two patches are independent - one touches lines around 900, the other
+around 670 - and both apply strictly in this sorted order onto
 `libpthread-519.120.4` (`c0e60fb5ecfc54cf379c261d3f9572cc22ded891`).
 
 | Patch | Origin | What it does |
@@ -37,7 +37,7 @@ if (pthread_kern->proc_get_jit_entitled(p)) { ... }
 `proc_get_jit_entitled`. It has `proc_get_pthread_jit_allowlist` and
 `proc_get_pthread_jit_allowlist2`, which the very next block uses and which do
 resolve. So the only thing missing is the JIT-entitlement flag, and iOS 16.5 has
-no such concept to report — the correct behaviour on this train is not to
+no such concept to report - the correct behaviour on this train is not to
 advertise the bit at all.
 
 That is what the patch does: it removes the report and leaves the allowlist
@@ -51,7 +51,7 @@ pinned libpthread moves, re-run that comparison before trusting the patch.
 ## When these can go back to UniXNU
 
 `explicit-kernel-address.patch` should be deleted here as soon as UniXNU's
-`patches/libpthread/` can be referenced instead of shadowed — either by giving
+`patches/libpthread/` can be referenced instead of shadowed - either by giving
 module resolution a merge mode, or by rebasing the shared patch sets onto
 `xnu-8796` and dropping the device-local copies. The same applies to
 `patches/xnu/series`, which is device-local for the same reason.
