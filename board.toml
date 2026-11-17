@@ -93,8 +93,14 @@ archives = [
   "build-sheng-source-storage.py --policy-dir scripts/policies/ios-26.5.2-23F84",
   "component:AppleKeyStoreState",
   "component:RamBlock",
+  # build-storage-bindings.py is deliberately absent. It resolved the inherited
+  # IOBlockStorageDevice entries to absolute addresses in the original prelinked kext,
+  # which was the right approach while the kernel carried no IOStorageFamily classes.
+  # build-sheng-source-storage.py now compiles SourceStorage.cpp and the class itself,
+  # so the static bindings collided with it: 17 duplicate symbols (the class vtable,
+  # metaclass, gMetaClass and every inherited method). UniXNU-sheng 26 lists the source
+  # adapter and not the bindings script, for the same reason.
   "build-verified-root.py",
-  "build-storage-bindings.py",
 ]
 config_fragments = ["arch:configs/common.config", "soc:configs/sm8550.config", "os:configs/ios.config"]
 # The resolved order:
