@@ -862,27 +862,20 @@ jobs:
       # exited 0, and the branch printed "kernel build passed". The status is
       # now taken from PIPESTATUS on both invocations, and a patch failure is
       # called out by name before anything else is decided.
-      # --skip-prelink stages the native kernel as kernel.macho instead of
-      # pairing it against the original kernelcache. The pairing is the one step
-      # this port has not solved: emit_prelink matched 6805 of 21113 original
-      # functions (32%) and refused to emit with 16306 unresolved references.
-      # That gap is structural rather than a setting. The native kernel carries
-      # 29411 functions and 841 diversities against the kernelcache's 21113 and
-      # 2885 - a DEVELOPMENT-config build against Apple's RELEASE-LTO - so
-      # most functions have no reliable anchor. UniXNU provides the native-only
-      # mode exactly for this stage of bring-up: the kernel it stages is the same
-      # binary that was linked and sealed, with no kexts rebound.
-      #
-      # PENDING: prelinked kexts are required before this can boot an iOS user
-      # space; the native-only image is the bring-up artifact that proves the
-      # kernel itself builds, links and seals.
+      # Prelink runs with --allow-missing (board.toml [kernel.prelink]), so a
+      # candidate is written even though only 6805 of 21113 original functions
+      # pair. That makes the image experimental: emit_prelink records every
+      # unresolved reference in kernel.macho.json, and a boot would fail at the
+      # first rebound kext. It is still the honest next artifact - it is the real
+      # prelinked fileset rather than the native-only stage - and the report says
+      # exactly how much is unbound.
       - name: Build the kernel
         working-directory: UniXNU
         env:
           CCACHE: python3 ${{ github.workspace }}/myron-ios26/scripts/compile-records.py
         run: |
           set -o pipefail
-          UNIXNU_TOOLCHAIN="$HOME/unixnu-linux" ./unixnu build kernel --skip-prelink -D ../myron-ios26 2>&1 | tee build.log
+          UNIXNU_TOOLCHAIN="$HOME/unixnu-linux" ./unixnu build kernel -D ../myron-ios26 2>&1 | tee build.log
           status=${PIPESTATUS[0]}
           if [ "$status" -eq 0 ]; then
             echo "kernel build passed"
@@ -890,7 +883,7 @@ jobs:
           fi
           echo "::warning::parallel build failed (status $status); repeating serially for a readable diagnostic"
           rm -rf out/myron/*/myron_ios26/logs
-          UNIXNU_TOOLCHAIN="$HOME/unixnu-linux" ./unixnu build kernel --skip-prelink -j 1 -D ../myron-ios26 2>&1 | tee build.log
+          UNIXNU_TOOLCHAIN="$HOME/unixnu-linux" ./unixnu build kernel -j 1 -D ../myron-ios26 2>&1 | tee build.log
           status=${PIPESTATUS[0]}
 
           # A patch that does not apply is never the expected boundary.
