@@ -104,7 +104,15 @@ def compile_reference(destination: Path) -> Path:
         elif not value.startswith('-W'):
             command.append(value)
         index += 1
-    command.extend(['-Wno-error', '-I', str(ROOT / 'build/storage-abi/include'), '-I', str(REFER)])
+    # The reference object exists only to enumerate vtable slot names.
+    # native_prelink.macho() - a shared kit parser this repository does not own -
+    # accepts plain arm64 only, while the kernel record this is replayed from
+    # builds arm64e, whose CPU subtype is 2. Build this one object for arm64 so
+    # the parser can read it: slot names and their order come from the C++ class
+    # declaration, not from the pointer-authentication ABI, so the list is the
+    # same either way. Everything linked into the kernel stays arm64e.
+    command.extend(['-target', 'arm64-apple-ios26.0',
+                    '-Wno-error', '-I', str(ROOT / 'build/storage-abi/include'), '-I', str(REFER)])
     (OUT / 'reference.compile-command.json').write_text(json.dumps(command, indent=2) + '\n')
     result = subprocess.run(command, cwd=record['directory'], stdout=subprocess.PIPE,
                             stderr=subprocess.STDOUT, text=True)
