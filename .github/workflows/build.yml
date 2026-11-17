@@ -689,16 +689,20 @@ jobs:
 
           path = pathlib.Path('UniXNU/scripts/build-sheng-source-storage.py')
           text = path.read_text(encoding='utf-8')
-          old = "    device = (args.device or tree).resolve()"
-          new = ("    device = (args.device or Path(os.environ.get('UNIXNU_DEVICE', tree))).resolve()")
-          if "UNIXNU_DEVICE" in text:
-              print('already reads UNIXNU_DEVICE')
+          old_device = "    device = (args.device or tree).resolve()"
+          new_device = ("    device = (args.device or Path(os.environ.get('UNIXNU_DEVICE', tree))).resolve()")
+          old_ufs = "    sources = [base, device / 'drivers/ShengUfs/NativeUfs.cpp',"
+          new_ufs = "    sources = [base, tree / 'drivers/ShengUfs/NativeUfs.cpp',"
+          if "UNIXNU_DEVICE" in text and "'drivers/ShengUfs/NativeUfs.cpp'" in text and 'tree /' in text.split("NativeUfs.cpp")[0][-40:]:
+              print('already patched')
           else:
-              assert old in text, 'the device resolution line changed upstream'
-              path.write_text(text.replace(old, new, 1), encoding='utf-8')
-              print('storage adapter now honours UNIXNU_DEVICE')
+              assert old_device in text, 'the device resolution line changed upstream'
+              assert old_ufs in text, 'the UFS source line changed upstream'
+              text = text.replace(old_device, new_device, 1).replace(old_ufs, new_ufs, 1)
+              path.write_text(text, encoding='utf-8')
+              print('adapter reads UNIXNU_DEVICE and takes NativeUfs.cpp from the tree')
           PY
-          grep -n "device = (args.device" UniXNU/scripts/build-sheng-source-storage.py
+          grep -nE "device = \\(args.device|drivers/ShengUfs/NativeUfs" UniXNU/scripts/build-sheng-source-storage.py
 
       - name: Fetch, configure and assemble
         working-directory: UniXNU
