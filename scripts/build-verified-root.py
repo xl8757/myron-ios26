@@ -112,23 +112,6 @@ int __llvm_profile_write_buffer_internal(void *buffer)
     return -1;
 }
 
-/* prng_random.c's source_corecrypto14_bootstrap() calls this only when the boot
- * kernel collection carries no original com.apple.kec.corecrypto: it looks that
- * kext up first and returns after starting it. On a real boot collection the
- * lookup succeeds and this stub is never called; it exists so the reference
- * resolves, because the corecrypto archive this build links is the namespaced
- * one, which renames the 64 provider symbols that collide with the kernel and
- * therefore cannot supply the plain name. Returning a failure keeps the
- * no-original-crypto path honest: it panics by design rather than pretending
- * the provider started. */
-int corecrypto_kext_start(void *module, void *data);
-int corecrypto_kext_start(void *module, void *data)
-{
-    (void)module;
-    (void)data;
-    return -1;
-}
-
 /* NativeRamBlock takes this address under a PAC-signed reference and calls it to
  * ask whether a range may be released back to the static pool. Its definition
  * lives in the macOS 27 payload-addon-release patch, which the iOS 26 profile
