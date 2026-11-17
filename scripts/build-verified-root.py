@@ -102,6 +102,15 @@ volatile uint32_t sheng_idle_sigp_refused;
 volatile uint32_t sheng_idle_enter[8];
 volatile uint32_t sheng_idle_disallowed[8];
 
+/* The digest-time counters come from cssha-digest-time.patch, which is part of the
+ * macOS 27 profile. Same reasoning as above: the card reads them, this board has
+ * no such measurement, and zero reads as "not recorded". */
+uint64_t cs_native4k_digest_wall[2];
+uint64_t cs_native4k_digest_cpu[2];
+uint64_t cs_native4k_digest_bytes[2];
+uint64_t cs_native4k_chunk_ticks;
+uint64_t cs_native4k_record_ticks;
+
 /* NativeRamBlock takes this address under a PAC-signed reference and calls it to
  * ask whether a range may be released back to the static pool. Its definition
  * lives in the macOS 27 payload-addon-release patch, which the iOS 26 profile
