@@ -6,6 +6,45 @@ build observations on purpose: a green build proves nothing about the phone.
 
 ## 2026-11-17: the vendor ABI was the problem, not the device tree
 
+### Build result of the aston switch
+
+Green. The firmware now contains what the working sibling contains:
+
+    modules            98   (was 106)
+    EnvDxe             present
+    EnvDxeEnhanced     absent
+    SmemDxe            present
+    DtbExtensionHobDxe absent
+    load order         DxeCore -> PcdDxe -> EnvDxe -> ReportStatusCodeRouter ...
+    myron-boot.img     1847296 bytes   (was 2027520)
+    SILICIUM_UEFI.fd   sha256 e7fbecef859e...
+
+Not yet booted on hardware. The build being green proves the configuration
+resolves and the vendor set links; it says nothing about whether the DXE
+assertion is gone. That is the next hardware check.
+
+### Three build defects introduced and then fixed during the switch
+
+1. **Missing `Binaries/` prefix.** The path rewrite produced a mix: some entries
+   were `Binaries/aston/QcomPkg/...` and some were `aston/QcomPkg/...`. EDK2
+   resolves the former against WORKSPACE and stops on the latter with
+   `aston/QcomPkg/Drivers/SmemDxe/SmemDxe.inf is not found in packages path`.
+   Adding `Binaries` to `PACKAGES_PATH` did **not** help, which is the clue that
+   the prefix itself was the problem, not the search path. All 49 vendor INF
+   lines now carry the prefix.
+2. **`patch_vendor_asserts.py` failed the build.** It reported
+   `0 call(s) neutralised across 0 module(s)` and exited non-zero under
+   `--require 1`. The aston set has no assert-printer deadloops; that patching
+   was only ever needed for the drivers extracted from the phone, which had
+   Xiaomi's DEBUG assert printer compiled in. The step now runs with
+   `--require 0 || true` so a future change to the set is still visible in the
+   log.
+3. **The memory map validator failed first.** It was left pointing at the BSP
+   names from the rename that has since been reverted. Restoring the validator
+   with the live-FDT names fixed it: `PASS: 77 descriptors, 63 AddMem ranges,
+   no overlaps`.
+
+
 ### What the sibling package does
 
 `aogg2023/songyuan-device` is a UniXNU device repository for **the same phone**
