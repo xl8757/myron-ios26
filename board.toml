@@ -90,6 +90,7 @@ archives = [
   "build-software-aes-bindings.py",
   "build-libpthread-kernel.py",
   "component:ShengUfs",
+  "build-sheng-source-storage.py --policy-dir scripts/policies/ios-26.5.2-23F84",
   "component:AppleKeyStoreState",
   "component:RamBlock",
   "build-verified-root.py",
