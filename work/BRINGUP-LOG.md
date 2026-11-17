@@ -1,5 +1,122 @@
 # Bring-up log
 
+## 2026-11-17: why the known-good build boots - it has no vendor DXE at all
+
+Chasing the 53-vs-106 module gap found it, and it is not a driver-version issue.
+
+`tools/experiment.py` takes a `--vendor` switch. The workflow default is
+`full`, but the build that reaches the UniXNU menu reports
+
+    display = simple    1
+    vendor  = none     112
+
+so it was dispatched by hand with `vendor=none`, which comments out 112 vendor
+entries from `DXE.inc` / `APRIORI.inc`. That is the whole difference. The
+known-good firmware does not contain `EnvDxe`, `SmemDxe`, `ChipInfo`, `UFSDxe`,
+`ClockDxe` or any of the rest; it is the core DXE stack, `SimpleFbDxe`,
+`DtbExtensionHobDxe`, UniXNU and the payload machinery.
+
+Reproduced with `-f display=simple -f vendor=none`:
+
+| | known-good | rebuilt |
+| --- | --- | --- |
+| modules | 53 | **52** |
+| module sets | - | identical except `ButtonsDxe` is missing |
+| myron-boot.img | 2404352 | 2396160 |
+| vendor inputs | 219 (OS3.0.13.0) | 219 |
+
+`ButtonsDxe` is the one difference and it never did anything in the working
+build either: its log line is `SetupKeypad: Failed to Locate STI Device Path`,
+so key input was already dead and the menu relied on its 10 s timeout.
+
+### The consequence for reaching a kernel
+
+The configuration that boots has no storage driver, so it cannot read a
+partition and cannot boot anything but a payload from the FAT volume. Getting to
+a kernel is therefore not "add the kernel to this firmware" - the payload can
+carry it, but the kernel needs the storage and platform drivers that were
+switched off, and those are exactly the ones that fault.
+
+So the two tracks are now clearly separate:
+
+1. **Firmware track**: `vendor=none` boots to the UniXNU menu. Extending it means
+   adding vendor drivers back one group at a time and testing.
+2. **Kernel track**: `kernel/kernel.macho` is built (89423872 bytes, sha256
+   68bcd2fb...). Booting it needs a payload that carries it plus whatever the
+   prelink and Data seed steps produce, and those need the 23F84 IPSW and the
+   device's unique chip id, neither of which can live in the repository.
+
+### Reverts made to get here
+
+Everything from `d6d5ec4` to HEAD that touched the platform package was reverted:
+`DXE.inc`, `APRIORI.inc`, `RAW.inc`, `myron.dsc`, `myron.fdf`,
+`DtbExtensionHobDxe.{c,inf}`, `AutoLogDxe.{c,inf}`, `UniXNURamDiskDxe.c`,
+`tools/make_payload.py`, `fetch_vendor_inputs.py` and
+`Resources/vendor-inputs.json`. Two of those mattered for the build to even
+succeed: `make_payload.py` needs its `repack` subcommand, and the vendor
+manifest has to match the firmware the extractor pins (OS3.0.13.0, 219 entries,
+`DxeCore` sha `b6c8d8c9...`) or the extractor stops at
+`vendor input mismatch: DxeCore`.
+
+## 2026-11-17: a known-good boot, captured from the phone
+
+The release `fd-20261112-065918-d6d5ec4-refd` (source `d6d5ec4efc02`, Mu
+`46e4ac08`, `display=simple`) boots all the way through, and the phone exported
+its log through the on-screen QR viewer. Saved at
+`work/logs/myron-20190100-000721.log`.
+
+The whole chain works:
+
+    00:06:57.612  [Bds] Entry...
+    00:06:57.819  GraphicsConsole video resolution 1200 x 2608
+    00:06:57.865  FrameBufferBase: 0xFC800000  PixelsPerScanLine: 0x4B0 (1200)
+    00:07:00.869  [Bds]Booting UniXNU
+    00:07:00.929  UNIXNU: UniXNU 0.1.0 starting
+    00:07:00.930  config: loaded \EFI\UniXNU\unixnu.tom
+    00:07:00.986  menu: shown 1 entries, default 0 'hello'
+    00:07:10.985  boot: entry 'hello' (Hello payload)          <- 10 s menu timeout
+    00:07:11.045  boot: starting \PAYLOADS\HELLO.EFI
+    00:07:11.047  boot: \PAYLOADS\HELLO.EFI returned Success
+    00:07:21.026  AUTOLOG: starting official QR log viewer (1200x1200)
+
+So UEFI -> BDS -> UniXNU menu -> payload handoff all work on this phone. The
+firmware is not fundamentally broken.
+
+### What that build contains
+
+53 modules. It carries only the core DXE stack plus `SimpleFbDxe` and a custom
+`DtbExtensionHobDxe`; it does **not** carry the 46 vendor drivers (`EnvDxe`,
+`SmemDxe`, `ChipInfo`, `UFSDxe`, `ClockDxe`, ...) nor `DisplayDxe`. Those are
+exactly the modules that, in the current tree, produce the fault.
+
+### The hardware errors it logs, and survives
+
+    RamManagerDxe  ASSERT Status = Not Found            (no RAM partition protocol)
+    Failed to Locate Clock Protocol / DDR Info / Chip Info
+    Failed to Find UFS IORT Node!
+    SetupKeypad: Failed to Locate STI Device Path      (no key input)
+    DTBHOB: no entry argument HOB, ABL passed no tree  (device tree handoff failed)
+    UNIXNURAMDISK: x0 0x0 is not a device tree
+
+These are the same failures chased for several rounds in this log. In this build
+they are logged and the boot continues, because the drivers that would consume
+those protocols are absent. That is the difference between the two trees: not
+that the protocol lookups succeed, but that nothing depends on them.
+
+Note also `GraphicsConsole video resolution 1200 x 2608` and
+`PixelsPerScanLine 0x4B0` = 1200, so the panel really is 1200x2608 with a
+1200-pixel scanline. That confirms the geometry measured on Android and means
+the `PcdFrameBuffer*` values are not the panel's own numbers.
+
+### What this changes
+
+The question is no longer "why does the firmware not boot" - it does, at
+`d6d5ec4`. It is "which change between `d6d5ec4` and the current HEAD breaks
+it". Every modification in this session after that commit is a candidate, and
+the honest way forward is to bisect against this known-good baseline rather than
+keep changing several things at once.
+
+
 Reverse chronological. Every entry says what was observed, on what evidence, and
 what it means for the next attempt. Hardware observations are separated from
 build observations on purpose: a green build proves nothing about the phone.
