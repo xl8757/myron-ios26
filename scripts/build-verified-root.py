@@ -104,6 +104,30 @@ def compile_environment(tree: Path) -> dict[str, str]:
     return env
 
 
+def as_cxx(command: list[str], source: Path) -> list[str]:
+    """Replay a C compile as an explicit C++ compile of one source.
+
+    The recipe came from prng_random.o (C), and the clang wrapper prepends
+    -target, which makes clang pick the language from the file extension before
+    any -x is consulted. So the language flag goes before the source argument,
+    and the source argument is moved to the end where it applies.
+    """
+    argument = str(source)
+    output = str(source.with_suffix('.o'))
+    rest, index = [], 1
+    while index < len(command):
+        value = command[index]
+        if value == argument:
+            index += 1
+            continue
+        if value == '-o':
+            index += 2
+            continue
+        rest.append(value)
+        index += 1
+    return [command[0], *rest, '-xc++', argument, '-o', output]
+
+
 def command_for(record: dict, source: Path, destination: Path, includes: list[Path]) -> list[str]:
     """The kernel's own compile flags, with the input and output swapped in."""
     command, index = [], 0
@@ -162,13 +186,7 @@ def main() -> int:
         command = command_for(record, source, destination, includes)
         print('compile %s suffix=%r lang=%s' % (source.name, source.suffix, 'c++' if source.suffix == '.cpp' else 'c'))
         if source.suffix == '.cpp':
-            # The recipe is a C compile (prng_random.o), and replayed verbatim it
-            # makes clang treat the generated table as C. VerifiedBlockPolicy.h
-            # is C++ - extern "C", static_assert, nullptr - so the language has
-            # to be forced. Prepended as a single -xc++ token so no later
-            # argument can separate or override it, and so the value cannot be
-            # mistaken for an input file.
-            command = [command[0], '-xc++', *command[1:]]
+            command = as_cxx(command, source)
         (OUT / f'{source.stem}.compile-command.json').write_text(json.dumps(command, indent=2) + '\n')
         result = subprocess.run(command, cwd=record['directory'], env=compile_environment(ROOT),
                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
