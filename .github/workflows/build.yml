@@ -37,6 +37,11 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      skip_prelink:
+        description: "Stage the linked kernel without prelinking it. The prelinked image is 85.3 MiB and the XNU_Payload window is 56 MiB, so a boot test needs the un-prelinked one."
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -875,7 +880,9 @@ jobs:
           CCACHE: python3 ${{ github.workspace }}/myron-ios26/scripts/compile-records.py
         run: |
           set -o pipefail
-          UNIXNU_TOOLCHAIN="$HOME/unixnu-linux" ./unixnu build kernel -D ../myron-ios26 2>&1 | tee build.log
+          SKIP_PRELINK=""
+          if [ "${{ inputs.skip_prelink }}" = "true" ]; then SKIP_PRELINK=--skip-prelink; fi
+          UNIXNU_TOOLCHAIN="$HOME/unixnu-linux" ./unixnu build kernel $SKIP_PRELINK -D ../myron-ios26 2>&1 | tee build.log
           status=${PIPESTATUS[0]}
           if [ "$status" -eq 0 ]; then
             echo "kernel build passed"
@@ -883,7 +890,7 @@ jobs:
           fi
           echo "::warning::parallel build failed (status $status); repeating serially for a readable diagnostic"
           rm -rf out/myron/*/myron_ios26/logs
-          UNIXNU_TOOLCHAIN="$HOME/unixnu-linux" ./unixnu build kernel -j 1 -D ../myron-ios26 2>&1 | tee build.log
+          UNIXNU_TOOLCHAIN="$HOME/unixnu-linux" ./unixnu build kernel $SKIP_PRELINK -j 1 -D ../myron-ios26 2>&1 | tee build.log
           status=${PIPESTATUS[0]}
 
           # A patch that does not apply is never the expected boundary.
