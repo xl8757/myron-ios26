@@ -703,6 +703,42 @@ jobs:
           PY
           grep -nE "device = \\(args.device|drivers/ShengUfs/NativeUfs" UniXNU/scripts/build-sheng-source-storage.py
 
+      # The source-built corecrypto archive is attached without -force_load:
+      #     KERNEL_EXTRA_ARCHIVES="-L$KERNEL_SDKROOT/usr/local/lib/kernel
+      #                            -lfirehose_kernel $CRYPTO_ARCHIVE"
+      # Every other archive in that script uses -Wl,-force_load. Because this one
+      # is searched lazily, only the objects some reference pulls in are linked.
+      # cc_fips/src/fipspost_post.c is in the corecrypto_kext target's 631 sources
+      # and instantiates
+      #     __attribute__((section("__TEXT,__fips_hmacs"))) const unsigned char ...[32]
+      # but nothing references it, so its object is dropped and the section never
+      # reaches the kernel. scripts/seal-source-crypto-kernel.py then refuses:
+      #     Missing real provider code or POST HMAC field
+      # Force-loading the archive keeps that object, which is what the seal step
+      # hashes. Nothing else changes: the archive is the namespaced build, so its
+      # provider symbols cannot collide with the kernel's own.
+      - name: Keep the corecrypto FIPS objects in the kernel link
+        run: |
+          python3 - <<'PY'
+          import pathlib
+
+          path = pathlib.Path('UniXNU/scripts/build-xnu-4k-baseline.sh')
+          text = path.read_text(encoding='utf-8')
+          old = ('  KERNEL_EXTRA_ARCHIVES="-L$KERNEL_SDKROOT/usr/local/lib/kernel '
+                 '-lfirehose_kernel $CRYPTO_ARCHIVE"')
+          new = ('  # -force_load keeps fipspost_post.o: its __TEXT,__fips_hmacs section is\n'
+                 '  # what seal-source-crypto-kernel.py hashes, and nothing references it.\n'
+                 '  KERNEL_EXTRA_ARCHIVES="-L$KERNEL_SDKROOT/usr/local/lib/kernel '
+                 '-lfirehose_kernel -Wl,-force_load,$CRYPTO_ARCHIVE"')
+          if '-Wl,-force_load,$CRYPTO_ARCHIVE' in text:
+              print('already force-loads the crypto archive')
+          else:
+              assert old in text, 'the crypto archive line changed upstream'
+              path.write_text(text.replace(old, new, 1), encoding='utf-8')
+              print('crypto archive is force-loaded')
+          PY
+          grep -n 'force_load,\$CRYPTO_ARCHIVE' UniXNU/scripts/build-xnu-4k-baseline.sh
+
       - name: Fetch, configure and assemble
         working-directory: UniXNU
         run: |
