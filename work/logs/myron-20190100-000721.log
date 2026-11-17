@@ -1,0 +1,155 @@
+00:06:52.588 : [DXE  ] [ERR ] DTBHOB: no entry argument HOB, ABL passed no tree
+00:06:52.908 : [DXE  ] [INFO] DxeMemoryProtectionHobLibConstructor - Unable to fetch memory protection HOB. Zero-ing memory protection settings
+00:06:54.575 : [RTDXE] [INFO] MemoryTypeInfoSecVarCheckLibConstructor()
+00:06:54.575 : [RTDXE] [INFO] VarCheckLibRegisterSetVariableCheckHandler - 0xC2851958 Success
+00:06:54.575 : [RTDXE] [INFO] Variable driver will work at emulated non-volatile variable mode!
+00:06:54.575 : [RTDXE] [INFO] Variable driver will work with auth variable format!
+00:06:54.598 : [RTDXE] [INFO] NOTICE - AuthVariableLibInitialize() returns Unsupported!
+00:06:54.598 : [RTDXE] [INFO] Variable driver will continue to work without auth variable support!
+00:06:54.598 : [RTDXE] [INFO] RecordSecureBootPolicyVarData GetVariable SecureBoot Status E
+00:06:54.609 : [RTDXE] [INFO] VarCheckLibRegisterSetVariableCheckHandler - 0xC2853DC8 Success
+00:06:54.974 : [RTDXE] [WARN] InitializeRealTimeClock: using default timezone/daylight settings
+00:06:55.502 : [DXE  ] [ERR ] PrepareRfsProtection: Failed to Locate SCM Protocol! Status = Not Found
+00:06:55.984 : [DXE  ] [INFO] 0: shl:0 shr:0 mask:FF0000
+00:06:55.984 : [DXE  ] [INFO] 1: shl:0 shr:0 mask:FF00
+00:06:55.984 : [DXE  ] [INFO] 2: shl:0 shr:0 mask:FF
+00:06:55.984 : [DXE  ] [INFO] Bytes per pixel: 4
+00:06:55.984 : [DXE  ] [INFO] 0: shl:0 shr:0 mask:FF0000
+00:06:55.984 : [DXE  ] [INFO] 1: shl:0 shr:0 mask:FF00
+00:06:55.984 : [DXE  ] [INFO] 2: shl:0 shr:0 mask:FF
+00:06:55.984 : [DXE  ] [INFO] Bytes per pixel: 4
+00:06:56.558 : [DXE  ] [ERR ] Failed to Locate RAM Partition Protocol!
+00:06:56.558 : [DXE  ] [ERR ] 
+00:06:56.558 : [DXE  ] [ERR ] ASSERT_EFI_ERROR (Status = Not Found)
+00:06:56.558 : [DXE  ] [ERR ] ASSERT [RamManagerDxe] AutoGen.c(302): !(((RETURN_STATUS)(Status)) >= 0x8000000000000000ULL)
+00:06:56.558 : [DXE  ] [ERR ] 
+00:06:56.558 : [DXE  ] [ERR ] ASSERT_EFI_ERROR (Status = Invalid Parameter)
+00:06:56.558 : [DXE  ] [ERR ] ASSERT [RamManagerDxe] MemoryAllocationLib.c(821): !(((RETURN_STATUS)(Status)) >= 0x8000000000000000ULL)
+00:06:56.712 : [DXE  ] [ERR ] Failed to Locate Clock Protocol! Status = Not Found
+00:06:56.712 : [DXE  ] [ERR ] Failed to Locate DDR Info Protocol! Status = Not Found
+00:06:56.712 : [DXE  ] [ERR ] Failed to Locate Chip Info Protocol! Status = Not Found
+00:06:56.712 : [DXE  ] [ERR ] PlatformUpdateSmBiosType1: Failed to get Chip ID String! Status = Not Ready
+00:06:56.712 : [DXE  ] [ERR ] PlatformUpdateSmBiosType4: Failed to get Cluster 1 Speeds! Status = Not Ready
+00:06:56.712 : [DXE  ] [ERR ] PlatformUpdateSmBiosType17: Failed to get DDR Details! Status = Not Ready
+00:06:56.712 : [DXE  ] [ERR ] PlatformUpdateSmBiosType17: Failed to get DDR Speeds! Status = Not Ready
+00:06:56.712 : [DXE  ] [INFO] SmbiosAdd: Smbios type 0 with size 0x3B is added to 32-bit table
+00:06:56.712 : [DXE  ] [INFO] SmbiosAdd: Smbios type 0 with size 0x3B is added to 64-bit table
+00:06:56.712 : [DXE  ] [INFO] SmbiosCreateTable: Initialize 32-bit entry point structure
+00:06:56.712 : [DXE  ] [INFO] SmbiosCreateTable() re-allocate SMBIOS 32-bit table
+00:06:56.712 : [DXE  ] [INFO] SmbiosCreateTable: Initialize 64-bit entry point structure
+00:06:56.712 : [DXE  ] [INFO] SmbiosCreate64BitTable() re-allocate SMBIOS 64-bit table
+00:06:56.712 : [DXE  ] [INFO] SmbiosAdd: Smbios type 1 with size 0x62 is added to 32-bit table
+00:06:56.712 : [DXE  ] [INFO] SmbiosAdd: Smbios type 1 with size 0x62 is added to 64-bit table
+00:06:56.712 : [DXE  ] [INFO] SmbiosAdd: Smbios type 2 with size 0x57 is added to 32-bit table
+00:06:56.712 : [DXE  ] [INFO] SmbiosAdd: Smbios type 2 with size 0x57 is added to 64-bit table
+00:06:56.712 : [DXE  ] [INFO] SmbiosAdd: Smbios type 3 with size 0x4A is added to 32-bit table
+00:06:56.712 : [DXE  ] [INFO] SmbiosAdd: Smbios type 3 with size 0x4A is added to 64-bit table
+00:06:56.712 : [DXE  ] [INFO] SmbiosAdd: Smbios type 7 with size 0x31 is added to 32-bit table
+00:06:56.712 : [DXE  ] [INFO] SmbiosAdd: Smbios type 7 with size 0x31 is added to 64-bit table
+00:06:56.712 : [DXE  ] [INFO] SmbiosAdd: Smbios type 7 with size 0x2A is added to 32-bit table
+00:06:56.712 : [DXE  ] [INFO] SmbiosAdd: Smbios type 7 with size 0x2A is added to 64-bit table
+00:06:56.712 : [DXE  ] [INFO] SmbiosAdd: Smbios type 7 with size 0x2D is added to 32-bit table
+00:06:56.712 : [DXE  ] [INFO] SmbiosAdd: Smbios type 7 with size 0x2D is added to 64-bit table
+00:06:56.712 : [DXE  ] [INFO] SmbiosAdd: Smbios type 4 with size 0x9D is added to 32-bit table
+00:06:56.712 : [DXE  ] [INFO] SmbiosAdd: Smbios type 4 with size 0x9D is added to 64-bit table
+00:06:56.712 : [DXE  ] [INFO] SmbiosAdd: Smbios type 16 with size 0x19 is added to 32-bit table
+00:06:56.712 : [DXE  ] [INFO] SmbiosAdd: Smbios type 16 with size 0x19 is added to 64-bit table
+00:06:56.712 : [DXE  ] [INFO] SmbiosAdd: Smbios type 17 with size 0xC7 is added to 32-bit table
+00:06:56.712 : [DXE  ] [INFO] SmbiosAdd: Smbios type 17 with size 0xC7 is added to 64-bit table
+00:06:56.712 : [DXE  ] [INFO] SmbiosAdd: Smbios type 19 with size 0x21 is added to 32-bit table
+00:06:56.712 : [DXE  ] [INFO] SmbiosAdd: Smbios type 19 with size 0x21 is added to 64-bit table
+00:06:56.783 : [DXE  ] [INFO] Fail to locate AcpiSiliconHob!!
+00:06:56.877 : [DXE  ] [INFO] UniXNUDxe: Boot0000 first in BootOrder: Success
+00:06:56.948 : [DXE  ] [ERR ] Advanced Logger Info = C2C57000, Min = C2C57058, Max = C3057000
+00:06:57.031 : [DXE  ] [ERR ] Advanced Logger Info = C2C57000, Min = C2C57058, Max = C3057000
+00:06:57.102 : [DXE  ] [ERR ] UNIXNURAMDISK: x0 0x0 is not a device tree
+00:06:57.103 : [DXE  ] [ERR ] UNIXNURAMDISK: payload volume at 0xC23AF018, 1048576 bytes
+00:06:57.126 : [DXE  ] [ERR ] UNIXNURAMDISK: block device 0xC23AF018 size 0x100000 Success
+00:06:57.137 : [DXE  ] [INFO]  BlockSize : 512 
+00:06:57.137 : [DXE  ] [INFO]  LastBlock : 7FF 
+00:06:57.318 : [DXE  ] [ERR ] Failed to Find UFS IORT Node!
+00:06:57.612 : [DXE  ] [INFO] [Bds] Entry...
+00:06:57.612 : [DXE  ] [INFO] FatDiskIo: Cache Page OutBound occurred! 
+00:06:57.612 : [RTDXE] [INFO] Variable Driver Auto Update Lang, Lang:eng, PlatformLang:en Status: Success
+00:06:57.818 : [RTDXE] [INFO] [Variable]END_OF_DXE is signaled
+00:06:57.818 : [RTDXE] [INFO] Initialize variable error flag (FF)
+00:06:57.819 : [DXE  ] [INFO] Bds: BootOptionSupport NV variable forbids starting the hotkey service.
+00:06:57.819 : [DXE  ] [INFO] GraphicsConsole video resolution 1200 x 2608
+00:06:57.819 : [DXE  ] [INFO] Graphics - Mode 0, Column = 80, Row = 25
+00:06:57.819 : [DXE  ] [INFO] Graphics - Mode 1, Column = 80, Row = 50
+00:06:57.819 : [DXE  ] [INFO] Graphics - Mode 2, Column = 100, Row = 31
+00:06:57.819 : [DXE  ] [INFO] Graphics - Mode 3, Column = 128, Row = 40
+00:06:57.819 : [DXE  ] [INFO] Graphics - Mode 4, Column = 150, Row = 137
+00:06:57.819 : [DXE  ] [INFO] Graphics Console Started, Mode: 0
+00:06:57.865 : [DXE  ] [INFO] MaxMode:0x1 
+00:06:57.865 : [DXE  ] [INFO] Mode:0x0 
+00:06:57.865 : [DXE  ] [INFO] SizeOfInfo:0x24 
+00:06:57.865 : [DXE  ] [INFO] FrameBufferBase:0xFC800000 
+00:06:57.865 : [DXE  ] [INFO] FrameBufferSize:0xBF0400 
+00:06:57.865 : [DXE  ] [INFO] Version:0x0 
+00:06:57.865 : [DXE  ] [INFO] HorizontalResolution:0x4B0 
+00:06:57.865 : [DXE  ] [INFO] VerticalResolution:0xA30 
+00:06:57.865 : [DXE  ] [INFO] PixelFormat:0x1 
+00:06:57.865 : [DXE  ] [INFO] PixelsPerScanLine:0x4B0 
+00:06:57.867 : [DXE  ] [INFO] Coloring Background to color 0x0. Status: Success 
+00:06:57.867 : [DXE  ] [INFO] On Screen Notifications: 
+00:06:57.867 : [DXE  ] [INFO] Bmp Support: Allocating 0x57E40 bytes of memory
+00:06:57.867 : [DXE  ] [INFO] BmpHeader->ImageOffset 0x436
+00:06:57.867 : [DXE  ] [INFO] BmpHeader->PixelWidth 0x12C
+00:06:57.867 : [DXE  ] [INFO] BmpHeader->PixelHeight 0x12C
+00:06:57.867 : [DXE  ] [INFO] BmpHeader->BitPerPixel 0x8
+00:06:57.867 : [DXE  ] [INFO] BmpHeader->ImageSize 0x15F90
+00:06:57.867 : [DXE  ] [INFO] BmpHeader->HeaderSize 0x28
+00:06:57.867 : [DXE  ] [INFO] BmpHeader->Size 0x163C6
+00:06:57.868 : [DXE  ] [ERR ] SetupKeypad: Failed to Locate STI Device Path! Status = Not Found
+00:06:57.868 : [DXE  ] [INFO] [Bds]OsIndication: 0000000000000000
+00:06:57.868 : [DXE  ] [INFO] [Bds]=============Begin Load Options Dumping ...=============
+00:06:57.868 : [DXE  ] [INFO]   Driver Options:
+00:06:57.868 : [DXE  ] [INFO]   SysPrep Options:
+00:06:57.868 : [DXE  ] [INFO]   Boot Options:
+00:06:57.868 : [DXE  ] [INFO]     Boot0000: UniXNU 		 0x0001
+00:06:57.868 : [DXE  ] [INFO]     Boot0001: Internal Storage 		 0x0001
+00:06:57.868 : [DXE  ] [INFO]     Boot0002: USB Storage 		 0x0001
+00:06:57.868 : [DXE  ] [INFO]     Boot0003: FFU Mode 		 0x0008
+00:06:57.868 : [DXE  ] [INFO]     Boot0004: Mass Storage 		 0x0008
+00:06:57.868 : [DXE  ] [INFO]   PlatformRecovery Options:
+00:06:57.868 : [DXE  ] [INFO] [Bds]=============End Load Options Dumping=============
+00:06:57.868 : [DXE  ] [INFO] [Bds]BdsWait ...Zzzzzzzzzzzz...
+00:06:57.868 : [DXE  ] [INFO] [Bds]BdsWait(3)..Zzzz...
+00:06:58.868 : [DXE  ] [INFO] [Bds]BdsWait(2)..Zzzz...
+00:06:59.868 : [DXE  ] [INFO] [Bds]BdsWait(1)..Zzzz...
+00:07:00.868 : [DXE  ] [INFO] [Bds]Exit the waiting!
+00:07:00.869 : [RTDXE] [ERR ] SecurityLock::LockType: SOFTWARE_LOCK, Module: CBD2E4D5-7068-4FF5-B462-9822B4AD8D60, Function: LockVariablePolicy, Output: VariablePolicy Lock
+00:07:00.869 : [DXE  ] [INFO] Memory  Previous  Current   Minimum    Next
+00:07:00.869 : [DXE  ] [INFO]  Type    Pages     Pages     Pages     Pages
+00:07:00.869 : [DXE  ] [INFO] ======  ========  ========  ========  =======
+00:07:00.869 : [DXE  ] [INFO]   09    00000000  00000003  00000000  00000004
+00:07:00.869 : [DXE  ] [INFO]   0A    00000000  00000000  00000000  00000000
+00:07:00.869 : [DXE  ] [INFO]   00    00000000  00000400  00000000  00000500
+00:07:00.869 : [DXE  ] [INFO]   06    0000012C  0000002C  00000000  00000037
+00:07:00.869 : [DXE  ] [INFO]   05    00000096  00000340  00000000  00000410
+00:07:00.869 : [DXE  ] [INFO] Memory Type Information settings change.
+00:07:00.869 : [DXE  ] [LOAD] [Bds]Booting UniXNU
+00:07:00.869 : [DXE  ] [INFO] [Bds] Expand Fv(CD8D4C84-20AD-4073-8A28-3400FAE05941)/FvFile(9B665204-A133-47A2-9396-9E2B370A4E25) -> Fv(CD8D4C84-20AD-4073-8A28-3400FAE05941)/FvFile(9B665204-A133-47A2-9396-9E2B370A4E25)
+00:07:00.929 : [DXE  ] [INFO] UNIXNU: UniXNU 0.1.0 starting as firmware boot option, firmware Project Silicium rev 0x10000
+00:07:00.930 : [DXE  ] [INFO] FSOpen: Open '\EFI\UniXNU\unixnu.tom' Success
+00:07:00.930 : [DXE  ] [INFO] UNIXNU: config: loaded \EFI\UniXNU\unixnu.tom
+00:07:00.930 : [DXE  ] [INFO] UNIXNU: config: 1 entries, 0 drivers, 0 dt patches, 0 acpi tables, 0 slices, 0 kits loaded, 0 skipped
+00:07:00.930 : [DXE  ] [INFO] UNIXNU: ui: graphics 1200x2608, scale 4, portrait layout
+00:07:00.986 : [DXE  ] [INFO] UNIXNU: menu: shown 1 entries, default 0 'hello', timeout 10000 ms, input yes, rotate 3000 ms
+00:07:00.986 : [DXE  ] [INFO] Connect ConIn in first WaitForKey in Lazy ConIn mode.
+00:07:00.986 : [DXE  ] [WARN] [Bds] Connect ConIn failed - Not Found!!!
+00:07:10.985 : [DXE  ] [INFO] UNIXNU: menu: timeout, booting default 0
+00:07:10.985 : [DXE  ] [INFO] UNIXNU: boot: entry 'hello' (Hello payload)
+00:07:10.985 : [DXE  ] [INFO] FSOpen: Open '\PAYLOADS\HELLO.EFI' Success
+00:07:10.985 : [DXE  ] [INFO] [Security] 3rd party image[0] can be loaded after EndOfDxe: VenHw(A9C6827C-1BD8-410C-885A-C46500F7D836)/\PAYLOADS\HELLO.EFI.
+00:07:11.045 : [DXE  ] [INFO] UNIXNU: boot: starting \PAYLOADS\HELLO.EFI
+00:07:11.047 : [DXE  ] [INFO] UNIXNU: boot: \PAYLOADS\HELLO.EFI returned Success
+00:07:11.047 : [DXE  ] [INFO] UNIXNU: menu: entry 0 returned Success
+00:07:11.104 : [DXE  ] [INFO] UNIXNU: menu: shown 1 entries, default 0 'hello', timeout -1 ms, input yes, rotate 3000 ms
+00:07:21.026 : [DXE  ] [ERR ] AUTOLOG: trigger at tick 12 (boot attempt seen)
+00:07:21.026 : [DXE  ] [ERR ] AUTOLOG: SimpleFileSystem handle count 1 (Success)
+00:07:21.026 : [DXE  ] [INFO] FSOpen: Open '\EFI\UniXNU\unixnu.tom' Success
+00:07:21.026 : [DXE  ] [ERR ] AUTOLOG: volume 0 open unixnu.tom Success
+00:07:21.026 : [DXE  ] [INFO] FSOpen: Open '\EFI\UniXNU\unixnu.tom' Success
+00:07:21.026 : [DXE  ] [ERR ] AUTOLOG: runtime unixnu.tom = # 最小可启动 payload：证明 UniXNU 菜单 -> 条目 -> 交接 这条链是通的。|# 文件名全部用 8.3（卷里没有长文件名条目），FAT 不区分大小写。|version = 1||[boot]|timeout = 10|default = "hAUTOLOG: starting official QR log viewer (1200x1200)
