@@ -62,6 +62,25 @@ include = [
   "AppleKeyStoreState",
 ]
 
+
+# The prelink inputs come from the OS profile ([kernel.prelink] there holds the
+# tool, the kernel path, the kernelcache hash and the 31 roots); this table only
+# adds what is board-specific.
+#
+# --allow-missing is deliberate and it makes this an EXPERIMENTAL image. The
+# native kernel pairs 6805 of 21113 original functions - 32% - because a
+# DEVELOPMENT-config build (29411 functions, 841 diversities) is measured against
+# Apple's RELEASE-LTO kernelcache (21113, 2885), so most functions have no
+# reliable anchor. XnuPrelink stops by design on unresolved mappings; this flag
+# lets it write the candidate anyway and records every gap in
+# kernel.macho.json for review. Expect a boot that fails at the first rebound
+# kext rather than a working system.
+#
+# PENDING: raise the pairing rate (a RELEASE-LTO native build, or more reviewed
+# anchors in kits/XnuPrelink/fixtures) before treating the output as bootable.
+[kernel.prelink]
+extra_args = ["--allow-missing"]
+
 [kernel]
 defconfig = "myron_ios26_defconfig"
 # Archive builders run in order before the kernel link. component:<ID> runs the
