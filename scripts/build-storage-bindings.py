@@ -222,7 +222,14 @@ def main() -> int:
     assembly.write_text(''.join(f'.globl {name}\n.set {name}, {value:#x}\n'
                                for name, value in sorted(bindings.items())))
     obj = OUT / 'original-bindings.o'
-    result = subprocess.run(['xcrun', 'clang', '-target', 'arm64-apple-ios17.0',
+    # This object carries only absolute symbol definitions (.globl/.set), so the
+    # instruction set is irrelevant - but the -target still decides the Mach-O
+    # cpu subtype written into the object, and the kernel it is linked into is
+    # arm64e. With arm64 here ld discarded the whole archive:
+    #   ld: warning: ignoring file .../libStorageBindings.a, building for
+    #   iOS-arm64e but attempting to link with file built for iOS-arm64
+    # and every symbol it was meant to supply went missing.
+    result = subprocess.run(['xcrun', 'clang', '-target', 'arm64e-apple-ios26.0',
                              '-Werror', '-Wno-incompatible-sysroot', '-c', str(assembly),
                              '-o', str(obj)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                             text=True)
