@@ -1,5 +1,84 @@
 # Bring-up log
 
+## 2026-11-18: adding drivers back has to follow the dependency chain
+
+Baseline is 52 modules (`vendor=none`). Adding drivers back one group at a time
+only works if a group carries everything its members need, and the first two
+attempts did not.
+
+### Attempt 1: ButtonsDxe + ChipInfo + ClockDxe - halted at ChipInfo
+
+    Loading driver at 0x000C28E3000 EntryPoint=0x000C28E4000 ChipInfo.efi
+    ASSERT AutoGen.c +571: !RETURN_ERROR (Status)
+    ASSERT DALModEnv.c +115: !EFI_ERROR (Status)
+    ASSERT DALModEnv.c +115: gpDALSYSLInitFnPtr
+
+My reading of this was wrong at first. I assumed the assert patch had missed
+`ChipInfo` and looked for another way to neutralise asserts. That was a dead end:
+Mu's `DebugAssert` is
+
+    AsciiSPrint(...); SerialPortWrite(...);
+    if (mask & DEBUG_PROPERTY_ASSERT_BREAKPOINT_ENABLED) CpuBreakpoint();
+    else if (mask & DEBUG_PROPERTY_ASSERT_DEADLOOP_ENABLED) CpuDeadLoop();
+
+and this board's `PcdDebugPropertyMask` is 0x0F, which contains neither bit, so
+an ASSERT prints and returns. **ASSERTs were never what halted the boot.** The
+real stop was the null `gpDALSYSLInitFnPtr` call after it, i.e. `ChipInfo`
+running without `DALSys`.
+
+### Attempt 2: added DALSys and PlatformInfoDxeDriver - halted inside DALSys
+
+    Loading driver at 0x000C28B3000 EntryPoint=0x000C28B4000 DALSys.efi
+    ASSERT AutoGen.c +382: !RETURN_ERROR (Status)
+    Unable to locate smem protocol! status=0xE
+    Unable to locate shared memory! status=0xE
+
+0xE is EFI_NOT_FOUND. `DALSys` needs the SMEM protocol, which `SmemDxe`
+installs - in the earlier GUID survey `15ffbfaa-ca8c-4ce3-bcea-dabe705e664d` was
+referenced by `SmemDxe` and nothing else. So the chain is longer than one level.
+
+### The dependency chain, as measured
+
+    EnvDxeEnhanced  publishes the device tree HOB
+      -> SmemDxe    needs the tree, installs the SMEM protocol
+        -> DALSys   needs SMEM
+          -> ChipInfo, PlatformInfoDxeDriver
+            -> ClockDxe, DDRInfoDxe
+
+Each level fails with a named protocol in the log, which is what makes this
+walkable: the message says which link is missing.
+
+### Attempt 3: the whole chain at once
+
+`EnvDxeEnhanced SmemDxe DALSys PlatformInfoDxeDriver ChipInfo ClockDxe
+DDRInfoDxe ButtonsDxe`.
+
+### The skip mechanism, and what it does not do
+
+`tools/patch-exception-skip.py` rewrites Mu's AArch64 handler from
+
+    LogToConsole (UnicodeBuffer); ASSERT (FALSE); CpuDeadLoop ();
+
+to printing `SKIP ON FAULT: ELR 0x... -> 0x...` and advancing ELR past the
+faulting instruction. It is applied in CI and the string is confirmed present in
+the built `DxeCore`.
+
+It did not help attempts 1 and 2, and that is informative rather than a failure:
+those boots stopped on *returned error statuses*, not on CPU exceptions. The
+patch only fires when a driver touches dead memory, so a missing dependency still
+halts the boot. The two mechanisms cover different failures:
+
+| failure | handled by |
+| --- | --- |
+| vendor ASSERT | `patch_vendor_asserts.py` (nops the spin inside the assert printer) |
+| CPU exception on dead MMIO | `patch-exception-skip.py` (advances ELR) |
+| driver entry returns an error | DxeCore itself: prints `FAILED` and continues |
+| **missing protocol dependency** | **nothing - the driver halts** |
+
+The last row is what attempts 1 and 2 hit. There is no generic fix: a driver that
+cannot find its protocol will not run correctly whatever we do, so the group has
+to be complete.
+
 ## 2026-11-17 late: baseline reproduced on hardware
 
 The 52-module firmware (`fd-20261117-151756`, `vendor=none`, `display=simple`)
