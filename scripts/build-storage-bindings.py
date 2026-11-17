@@ -114,11 +114,16 @@ def compile_reference(destination: Path) -> Path:
     command.extend(['-target', 'arm64-apple-ios26.0',
                     '-Wno-error', '-I', str(ROOT / 'build/storage-abi/include'), '-I', str(REFER)])
     (OUT / 'reference.compile-command.json').write_text(json.dumps(command, indent=2) + '\n')
+    print('reference command: ' + ' '.join(str(c) for c in command))
     result = subprocess.run(command, cwd=record['directory'], stdout=subprocess.PIPE,
                             stderr=subprocess.STDOUT, text=True)
     (OUT / 'reference.compile.log').write_text(result.stdout or '')
     if result.returncode:
         fail('the reference class did not compile:\n' + (result.stdout or '')[-3000:])
+    header = destination.read_bytes()[:8]
+    import struct as _s
+    magic, cpu, subtype = _s.unpack_from('<III', header)
+    print('reference object: magic=%#x cpu=%#x subtype=%d' % (magic, cpu, subtype))
     return destination
 
 
