@@ -93,6 +93,33 @@ volatile uint32_t vt_host_frames_in;
 volatile uint32_t vt_host_frames_out;
 volatile uint32_t vt_host_frames_dropped;
 volatile uint32_t vt_host_errors;
+volatile uint32_t vt_host_error_stage;
+
+/* The same situation one layer down: BootLog.c also reads the idle / SIGP
+ * counters that sheng's power work defines. Two are scalars, two are arrays. */
+volatile uint32_t sheng_idle_sigp_cleared;
+volatile uint32_t sheng_idle_sigp_refused;
+volatile uint32_t sheng_idle_enter[8];
+volatile uint32_t sheng_idle_disallowed[8];
+
+/* NativeRamBlock takes this address under a PAC-signed reference and calls it to
+ * ask whether a range may be released back to the static pool. Its definition
+ * lives in the macOS 27 payload-addon-release patch, which the iOS 26 profile
+ * does not carry, so the address is null at link time unless defined. Returning
+ * false is the conservative answer the caller already handles: the range is
+ * kept rather than released, which is what a kernel with no payload addon
+ * wants. */
+/* Spelled with plain unsigned long rather than the kernel typedefs: this file
+ * is compiled against the kernel headers, where vm_offset_t and vm_size_t are
+ * already defined, and repeating the typedef here would be a redefinition. The
+ * layout is identical on arm64. */
+int ml_static_mfree_prepare(unsigned long vaddr, unsigned long size);
+int ml_static_mfree_prepare(unsigned long vaddr, unsigned long size)
+{
+    (void)vaddr;
+    (void)size;
+    return 0;
+}
 '''
 
 
