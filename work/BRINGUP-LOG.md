@@ -1,5 +1,67 @@
 # Bring-up log
 
+## 2026-11-17 late: baseline reproduced on hardware
+
+The 52-module firmware (`fd-20261117-151756`, `vendor=none`, `display=simple`)
+boots on the phone and exports its log. Diffed against the earlier known-good
+capture (`myron-20190100-000721.log`) line by line with timestamps stripped:
+
+    155 lines each, 151 identical
+    4 differences, all heap/logger addresses:
+      VarCheckLib handler   0xC2851958 -> 0xC2871958
+      Advanced Logger base  0xC2C57000 -> 0xC2C6B000
+      payload volume        0xC23AF018 -> 0xC23CE018
+
+Those shifts are the expected consequence of one fewer module (`ButtonsDxe`),
+not a behavioural difference. The chain is identical:
+
+    [Bds] Entry -> GraphicsConsole 1200x2608 -> Booting UniXNU
+    -> UniXNU 0.1.0 -> config loaded -> menu shown -> 10 s timeout
+    -> HELLO.EFI returned Success -> AUTOLOG QR viewer
+
+Saved as `work/logs/myron-20190100-000120.log`.
+
+### Honest note on how this baseline was obtained
+
+Everything from `d6d5ec4` to HEAD that touched the platform package was reverted
+in one go, not item by item. That got a working reference quickly but throws
+away the information about which of my changes mattered. Two are known
+necessary: `make_payload.py` needs its `repack` subcommand, and the vendor
+manifest must match the extractor's pin or the run stops at
+`vendor input mismatch: DxeCore`.
+
+### The input problem, for tomorrow
+
+Both logs report
+
+    SetupKeypad: Failed to Locate STI Device Path! Status = Not Found
+    Connect ConIn failed - Not Found!!!
+
+There is no input device at all; the menu boots by its 10 s timeout. So adding
+drivers has a trap: if a new driver changes timing or menu behaviour, the boot
+can stall with no way to interact. That makes input-capable drivers the first
+group to add, not an afterthought.
+
+### Plan for adding vendor drivers back
+
+Each group is one dispatch + one boot, and any group that faults gets bisected
+inside itself.
+
+| group | modules | purpose | risk |
+| --- | --- | --- | --- |
+| 1 | ButtonsDxe | restore input, so a stalled menu is recoverable | low |
+| 2 | ChipInfo, DDRInfoDxe, ClockDxe | SMBIOS/DDR/clock query protocols | low |
+| 3 | EnvDxeEnhanced, SmemDxe | device tree and shared memory | high - these were the crash source |
+| 4 | UFSDxe, SPMI, ICBDxe | storage access | high |
+
+`tools/experiment.py --vendor none --keep NAME` is the mechanism: `drop_vendor`
+comments every `Binaries/` line as `#NOVENDOR INF ...`, and `keep_vendor` finds
+those by name and uncomments them, so no hand editing is needed.
+
+Also worth remembering: the baseline has no storage driver (`Failed to Find UFS
+IORT Node!` every boot), so it can only run payloads from the FAT volume. A
+kernel needs group 4 plus the platform drivers from group 3.
+
 ## 2026-11-17: why the known-good build boots - it has no vendor DXE at all
 
 Chasing the 53-vs-106 module gap found it, and it is not a driver-version issue.
