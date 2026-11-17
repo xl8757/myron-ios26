@@ -120,7 +120,7 @@ def compile_reference(destination: Path) -> Path:
     (OUT / 'reference.compile.log').write_text(result.stdout or '')
     if result.returncode:
         fail('the reference class did not compile:\n' + (result.stdout or '')[-3000:])
-    header = destination.read_bytes()[:8]
+    header = destination.read_bytes()[:12]
     import struct as _s
     magic, cpu, subtype = _s.unpack_from('<III', header)
     print('reference object: magic=%#x cpu=%#x subtype=%d' % (magic, cpu, subtype))
