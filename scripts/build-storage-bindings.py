@@ -138,9 +138,18 @@ def vtable_names(object_path: Path) -> list[str]:
                 address, word = struct.unpack_from('<II', obj, reloff + i * 8)
                 if word >> 27 & 1 and word >> 28 == 0 and word >> 25 & 3 == 3:
                     relocations[section['va'] + address] = symbols[word & 0xFFFFFF][0]
-    names = [relocations.get(vtable + 16 + i * 8) for i in range(SLOTS)]
-    if not all(names) or vtable + 16 + SLOTS * 8 in relocations:
-        fail(f'the reference {CLASS} vtable is not {SLOTS} fully relocated slots')
+    # Count the slots instead of trusting a constant. The vtable is a run of
+    # 8-byte relocated words starting at the address point; the run ends at the
+    # first word that has no relocation. SLOTS is what this produced for the
+    # kernelcache the pin was measured from (iOS 16, 190 slots); the class gained
+    # virtual methods by iOS 26, so a fixed count cannot describe both. Counting
+    # keeps one script correct for either.
+    names, index = [], 0
+    while vtable + 16 + index * 8 in relocations:
+        names.append(relocations[vtable + 16 + index * 8])
+        index += 1
+    if not names:
+        fail(f'the reference {CLASS} vtable has no relocated slots')
     if not (names[0].endswith('D1Ev') and names[1].endswith('D0Ev')):
         fail('the reference vtable does not start with the complete/deleting destructors')
     return names
@@ -156,9 +165,9 @@ def main() -> int:
     if not PIN.is_file():
         fail(f'missing {PIN}; regenerate it with scripts/scan-prelink-storage.py')
     pin = json.loads(PIN.read_text())
-    if pin.get('slot_count') != SLOTS:
-        fail(f'the pin records {pin.get("slot_count")} slots, expected {SLOTS}')
     slots = [int(value, 16) for value in pin['slots']]
+    if pin.get('slot_count') != len(slots):
+        fail(f'the pin records {pin.get("slot_count")} slots but carries {len(slots)}')
     text_va, text_size = int(pin['kext_text']['va'], 16), pin['kext_text']['size']
     owned = [index for index, value in enumerate(slots)
              if text_va <= value < text_va + text_size]
@@ -168,6 +177,11 @@ def main() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
     reference = compile_reference(OUT / (CLASS + '.reference.o'))
     names = vtable_names(reference)
+    if len(names) != len(slots):
+        fail('the reference %s vtable has %d slots but the pin describes %d: '
+             'the pin was measured from another kernelcache (it records %s) and this '
+             'board needs its own; regenerate it with scripts/scan-prelink-storage.py'
+             % (CLASS, len(names), len(slots), pin.get('measured_from')))
 
     bindings = {
         VTABLE: int(pin['vtable'], 16),
@@ -223,7 +237,7 @@ def main() -> int:
     report = dict(class_name=CLASS, pin=pin['kext'], pin_vtable=pin['vtable'],
                   pin_metaclass=pin['metaclass'], pin_kext_text_sha256=pin['kext_text']['sha256'],
                   reference_object_sha256=hashlib.sha256(reference.read_bytes()).hexdigest(),
-                  vtable_slots=SLOTS, kext_owned_slots=owned,
+                  vtable_slots=len(names), kext_owned_slots=owned,
                   bindings={name: hex(value) for name, value in sorted(bindings.items())},
                   archive=str(archive), archive_sha256=hashlib.sha256(archive.read_bytes()).hexdigest(),
                   original_code_modified=False)
