@@ -42,6 +42,39 @@ while the repository said 1, which is what finally made it visible. A dispatched
 run with `-f display=custom` is the only way to build with the vendor display
 driver until that default changes.
 
+### The streaks are a display mode mismatch, and the PCDs are not the panel size
+
+Two builds differing only in `myron.dsc` (8 lines, the two `PcdFrameBuffer*`
+values) behave completely differently:
+
+| framebuffer PCDs | result |
+| --- | --- |
+| 1264x2780 | panel initialises, console draws as horizontal streaks, **no fault** |
+| 1200x2608 | **synchronous external abort at 0x17422030** inside EnvDxe, before the panel is up |
+
+1200x2608 with a 4800-byte stride is the panel's real geometry (SurfaceFlinger);
+FINDINGS.md records the firmware GOP as 1220x2656. Neither makes DisplayDxe
+happy. 1264x2780 is what `songyuanPkg` sets, and it is the value that gets the
+stack running.
+
+So the PCDs are an input the vendor driver expects in *its* units, not a
+description of the panel. The streaks are the mismatch being presented instead
+of faulting, which is strictly better: the DXE stack runs.
+
+The remaining work is to give DisplayDxe this panel's real mode. Its INF ships
+`PE32|DisplayDxe.patched.efi`, and Device-Binaries carries a `.patched` variant
+per device (`b4q`, `b5q`, `nuwa`, `pong`, `vili`, `vayu`, `nabu`, `gts8p`), so
+patching the binary for a given panel is the established mechanism rather than
+something to invent. aston's patched binary targets the OnePlus 15 panel.
+
+### Correction to an earlier claim in this log
+
+I wrote that `EnvDxe` was walking GICR frame 29 and that the device tree was
+"not the difference". The frame-29 arithmetic is right, but the conclusion is
+backwards: the GIC geometry in `myron.dtb` and `canoe.dtb` is identical, and the
+fault is switched on and off by the framebuffer PCDs, so it is the display
+initialisation path that reaches that address, not a GIC walk.
+
 ### Current state: streaks, not a dead panel
 
 With the vendor DisplayDxe in and songyuanPkg's geometry (1264x2780) the console
