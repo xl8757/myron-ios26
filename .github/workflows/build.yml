@@ -303,10 +303,9 @@ jobs:
         run: |
           config=$(find UniXNU/out/myron -name '.config' -type f | head -1)
           test -n "$config"
-          grep -q 'XNU_EXTRA_LD_ARCHIVES=.*libStorageBindings\.a' "$config"
           grep -q 'XNU_EXTRA_LD_ARCHIVES=.*libVerifiedRoot\.a' "$config"
-          grep -q '{tree}/build/io-storage-family/libStorageBindings.a' "$config"
-          echo "storage binding and verified-root archives are on the link line"
+          grep -q 'XNU_NATIVE_UFS_ARCHIVE=.*libShengUfs\.a' "$config"
+          echo "verified-root and source-storage archives are on the link line"
 
       # status.json is written by the step above, and every step is its own
       # shell, so this one has to run in the same directory to see it.
