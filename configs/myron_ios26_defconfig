@@ -14,8 +14,18 @@
 # NATIVE_PAC has no switch in the first place: pointer
 # authentication comes in through patches/xnu-12377/native-pac-keys.patch and
 # native-pac-arm64-user-jop.patch, which are unconditional. There is no switch.
-# CONFIG_XNU_NATIVE_CS_HASH_CACHE likewise no longer exists; the 12377 tree
-# carries that work in native-4k-signature-hash-cache.patch.
+# NATIVE_CS_HASH_CACHE does exist and defaults to 0. An earlier note in this
+# file claimed it was gone; that was wrong, and the kernel link proved it: the
+# driver log (package/BootLog.c, taken from sheng) references the counters the
+# patch only emits when the switch is on -
+#   cs_native4k_read_ticks, cs_native4k_hash_ticks, cs_native4k_record_ticks
+# - and native-4k-signature-hash-cache.patch guards their definitions with
+#   #if defined(XNU_NATIVE_CS_HASH_CACHE) && XNU_NATIVE_CS_HASH_CACHE
+# scripts/build-xnu-4k-baseline.sh turns the config into
+#   ubc_subr.o_CFLAGS_ADD=-DXNU_NATIVE_CS_HASH_CACHE=$XNU_NATIVE_CS_HASH_CACHE
+# with 0 as the default, so the definitions were simply compiled out. Turning it
+# on supplies them for real instead of stubbing counters that are meant to be
+# measured.
 
 # The crypto bootstrap mode. os:configs/ios.config sets "prelinked"; this board
 # overrides it to "source", and that override is the reason the virtio block
@@ -38,6 +48,9 @@ CONFIG_XNU_CRYPTO_BOOTSTRAP="source"
 
 # DT handoff and diagnostics.
 CONFIG_XNU_DT_PANIC_REGION=y
+# Supplies the cs_native4k_* counters the vendored BootLog.c references; see the
+# note above.
+CONFIG_XNU_NATIVE_CS_HASH_CACHE=y
 CONFIG_XNU_TRUST_CACHE_RUNTIME=y
 
 # iOS 26 binaries are linked with chained fixups; without this the prelinked
