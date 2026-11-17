@@ -104,26 +104,13 @@ def compile_reference(destination: Path) -> Path:
         elif not value.startswith('-W'):
             command.append(value)
         index += 1
-    # The reference object exists only to enumerate vtable slot names.
-    # native_prelink.macho() - a shared kit parser this repository does not own -
-    # accepts plain arm64 only, while the kernel record this is replayed from
-    # builds arm64e, whose CPU subtype is 2. Build this one object for arm64 so
-    # the parser can read it: slot names and their order come from the C++ class
-    # declaration, not from the pointer-authentication ABI, so the list is the
-    # same either way. Everything linked into the kernel stays arm64e.
-    command.extend(['-target', 'arm64-apple-ios26.0',
-                    '-Wno-error', '-I', str(ROOT / 'build/storage-abi/include'), '-I', str(REFER)])
+    command.extend(['-Wno-error', '-I', str(ROOT / 'build/storage-abi/include'), '-I', str(REFER)])
     (OUT / 'reference.compile-command.json').write_text(json.dumps(command, indent=2) + '\n')
-    print('reference command: ' + ' '.join(str(c) for c in command))
     result = subprocess.run(command, cwd=record['directory'], stdout=subprocess.PIPE,
                             stderr=subprocess.STDOUT, text=True)
     (OUT / 'reference.compile.log').write_text(result.stdout or '')
     if result.returncode:
         fail('the reference class did not compile:\n' + (result.stdout or '')[-3000:])
-    header = destination.read_bytes()[:12]
-    import struct as _s
-    magic, cpu, subtype = _s.unpack_from('<III', header)
-    print('reference object: magic=%#x cpu=%#x subtype=%d' % (magic, cpu, subtype))
     return destination
 
 
