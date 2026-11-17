@@ -665,6 +665,41 @@ jobs:
           PY
           grep -n "headers.prepare(storage" UniXNU/scripts/build-sheng-source-storage.py
 
+      # scripts/unixnu/kernel.py hands every archive recipe a UNIXNU_DEVICE
+      # environment variable holding the device repository (line: env = dict(env,
+      # ..., UNIXNU_DEVICE=str(ctx.device))). scripts/build-sheng-source-storage.py
+      # is the one recipe that needs to read device files, and it ignores that
+      # variable:
+      #     tree = args.tree.resolve()
+      #     device = (args.device or tree).resolve()
+      # With no --device on the command line it resolves the device to the build
+      # tree, so device_source() looks for the driver sources in
+      # <tree>/package and <tree>/kits/sheng, never in the repository that
+      # actually holds them. Every lookup then fails with
+      #   BootLog.c not found under the device or build tree
+      # even though the file is present and checked out.
+      #
+      # Read the variable the caller already sets. This is the same channel every
+      # other consumer uses, and it keeps the recipe command line free of an
+      # absolute path that would have to be computed per run.
+      - name: Let the storage adapter see the device repository
+        run: |
+          python3 - <<'PY'
+          import pathlib
+
+          path = pathlib.Path('UniXNU/scripts/build-sheng-source-storage.py')
+          text = path.read_text(encoding='utf-8')
+          old = "    device = (args.device or tree).resolve()"
+          new = ("    device = (args.device or Path(os.environ.get('UNIXNU_DEVICE', tree))).resolve()")
+          if "UNIXNU_DEVICE" in text:
+              print('already reads UNIXNU_DEVICE')
+          else:
+              assert old in text, 'the device resolution line changed upstream'
+              path.write_text(text.replace(old, new, 1), encoding='utf-8')
+              print('storage adapter now honours UNIXNU_DEVICE')
+          PY
+          grep -n "device = (args.device" UniXNU/scripts/build-sheng-source-storage.py
+
       - name: Fetch, configure and assemble
         working-directory: UniXNU
         run: |
