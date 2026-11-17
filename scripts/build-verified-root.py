@@ -291,16 +291,17 @@ def main() -> int:
     (OUT / 'nm.txt').write_text(listing.stdout or '')
     defined = {parts[2] for line in (listing.stdout or '').splitlines()
                if len(parts := line.split()) == 3 and parts[1] != 'U'}
-    needed = {'_vr_open', '_vr_verify_block', '_vr_xnu_crypto',
-              '_verified_root_key', '_verified_root_policies', '_verified_root_policy_count',
-              '_boot_progress_poll'}
+    # Only what this archive is responsible for. The six verified-root symbols are
+    # built into build/sheng-ufs/libShengUfs.a by build-sheng-source-storage.py;
+    # requiring them here would demand the very duplication that made the kernel
+    # link fail with seven duplicate symbols.
+    needed = {'_boot_progress_poll'}
     missing = sorted(needed - defined)
     if missing:
         fail('these symbols are still missing from the archive: ' + ', '.join(missing))
 
     (OUT / 'report.json').write_text(json.dumps({
-        'sources': ['kits/VerifiedRoot/src/verified_root.c', 'kits/VerifiedRoot/adapters/xnu_crypto.c',
-                    'generated boot-progress-stub.c'],
+        'sources': ['generated boot-progress-stub.c'],
         'verified_root_policy_count': 0,
         'root_verification': 'disabled: this board has no signed policy bundle',
         'boot_progress_poll': 'no-op observer',
