@@ -64,12 +64,12 @@
 # with "does not match the kernelcache this board was qualified against" until
 # scripts/extract-ipsw-pins.py has been run against a local copy.
 #   PENDING: pin verified against a local 23F84 kernelcache.
-"kernelcache_sha256" = "0f7d50ac1bfc7cdbf3acf5ed4934b5d5abbadee243dafb8d7487ca38b4450662"
+"kernelcache_sha256" = "0f7d50ac1bfc7cdbfc3acf5ed4934b5d5abbadee243dafb8d7487ca38b445066"
 "slide" = "-0x1000000"
 # AMFI start is a null __realmain trampoline in 23F84; the kernel patch calls
 # this original entry instead. Version bound to 23F84 - do not copy between
 # builds, and do not carry the iOS 16 profile's value here.
-"early_security_init" = "com.apple.driver.AppleMobileFileIntegrity=0xffffffe0008f13c8"
+"early_security_init" = "com.apple.driver.AppleMobileFileIntegrity=0xfffffe0008f13c80"
 # INHERITED FROM the iPadOS 26 profile's verified 30-entry list. emit_prelink
 # refuses to start without them, and the list is a property of this kernelcache:
 # a root that is absent from the __PRELINK_INFO of the image fails the build.
