@@ -91,20 +91,35 @@ def compile_reference(destination: Path) -> Path:
     if not source.is_file():
         fail(f'missing {source}')
     command, index = [], 0
-    while index < len(record['arguments']):
-        value = record['arguments'][index]
+    arguments = record['arguments']
+    while index < len(arguments):
+        value = arguments[index]
         if value == record['file']:
             command.append(str(source))
         elif value == '-o':
             command += ['-o', str(destination)]
             index += 1
-        elif value == '-Xclang' and index + 1 < len(record['arguments']) \
-                and record['arguments'][index + 1].startswith('-W'):
+        elif value == '-Xclang' and index + 1 < len(arguments) \
+                and arguments[index + 1].startswith('-W'):
             index += 1
+        elif value in ('-target', '--target', '-arch') and index + 1 < len(arguments):
+            # Dropped below, where a plain arm64 target is chosen. The recipe
+            # names arm64e and its arguments come first, so appending another
+            # target would lose to this one.
+            index += 1
+        elif value.startswith(('--target=', '-arch=')):
+            pass
         elif not value.startswith('-W'):
             command.append(value)
         index += 1
-    command.extend(['-Wno-error', '-I', str(ROOT / 'build/storage-abi/include'), '-I', str(REFER)])
+    # This object only exists to enumerate vtable slot names, and the two things
+    # that read it - native_prelink.macho() and the relocation scan below - model
+    # arm64. An arm64e object puts its vtable in __AUTH_CONST with signed
+    # pointers, which is a different encoding and yields no classic relocations,
+    # so the scan sees an empty table. Build this one object for plain arm64: the
+    # slot names and their order are the same, and the kernel still gets arm64e.
+    command.extend(['-target', 'arm64-apple-ios26.0',
+                    '-Wno-error', '-I', str(ROOT / 'build/storage-abi/include'), '-I', str(REFER)])
     (OUT / 'reference.compile-command.json').write_text(json.dumps(command, indent=2) + '\n')
     result = subprocess.run(command, cwd=record['directory'], stdout=subprocess.PIPE,
                             stderr=subprocess.STDOUT, text=True)
