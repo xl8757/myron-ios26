@@ -704,6 +704,41 @@ jobs:
           PY
           grep -nE "device = \\(args.device|drivers/ShengUfs/NativeUfs" UniXNU/scripts/build-sheng-source-storage.py
 
+      # kits/XnuPrelink/native_prelink.py inspects an arm64 Mach-O and refuses
+      # anything else on one line:
+      #     if (magic, cpu, subtype) != (0xfeedfacf, 0x100000c, 0):
+      #         raise ValueError('Only ordinary little-endian ARM64 is supported')
+      # The subtype field is not just an architecture id. Bits 0-7 name the
+      # architecture (0 arm64, 2 arm64e) and bits 24-31 carry the ABI version,
+      # which clang sets for an arm64e target. An arm64e object therefore has
+      # subtype 0x80000002, and comparing the whole word to zero rejects every
+      # arm64e object - including the vtable reference object that
+      # build-storage-bindings.py compiles on this board, whose kernel is arm64e.
+      # The check now compares the architecture byte and accepts both arm64 and
+      # arm64e. Everything else about the parser is unchanged, and the caller
+      # only reads load commands, segments and symbol names, none of which depend
+      # on the pointer-authentication ABI.
+      - name: Let the prelink Mach-O parser read arm64e objects
+        run: |
+          python3 - <<'PY'
+          import pathlib
+
+          path = pathlib.Path('UniXNU/kits/XnuPrelink/native_prelink.py')
+          text = path.read_text(encoding='utf-8')
+          old = ("    if (magic, cpu, subtype) != (0xfeedfacf, 0x100000c, 0):\n"
+                 "        raise ValueError('Only ordinary little-endian ARM64 is supported')")
+          new = ("    # Bits 0-7 are the architecture, bits 24-31 the ABI version.\n"
+                 "    if (magic, cpu) != (0xfeedfacf, 0x100000c) or (subtype & 0xff) not in (0, 2):\n"
+                 "        raise ValueError('Only ordinary little-endian ARM64 is supported')")
+          if 'subtype & 0xff' in text:
+              print('already accepts arm64e')
+          else:
+              assert old in text, 'the macho() architecture check changed upstream'
+              path.write_text(text.replace(old, new, 1), encoding='utf-8')
+              print('macho() now accepts arm64 and arm64e')
+          PY
+          grep -n "subtype & 0xff" UniXNU/kits/XnuPrelink/native_prelink.py
+
       - name: Fetch, configure and assemble
         working-directory: UniXNU
         run: |
