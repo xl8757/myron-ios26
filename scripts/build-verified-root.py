@@ -160,6 +160,13 @@ def main() -> int:
             fail(f'missing {source}')
         destination = OUT / (source.stem + '.o')
         command = command_for(record, source, destination, includes)
+        if source.suffix == '.cpp':
+            # The recipe is a C compile (prng_random.o), and its flags would make
+            # clang treat the generated table as C. VerifiedBlockPolicy.h is C++
+            # - extern "C", static_assert, nullptr - so the language has to be
+            # forced. Inserted after the recipe's own arguments so it wins.
+            command.insert(1, '-x')
+            command.insert(2, 'c++')
         (OUT / f'{source.stem}.compile-command.json').write_text(json.dumps(command, indent=2) + '\n')
         result = subprocess.run(command, cwd=record['directory'], env=compile_environment(ROOT),
                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
