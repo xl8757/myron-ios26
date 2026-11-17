@@ -95,21 +95,29 @@ CONFIG_XNU_NATIVE_UFS=y
 CONFIG_XNU_NATIVE_VIRTIO_BLOCK=n
 CONFIG_XNU_NATIVE_AES=n
 
-# ShengUfs subclasses IOBlockStorageDevice, whose classes live in the prelinked
-# IOStorageFamily kext. Compiling those classes in as well would register them
-# twice and panic, so libStorageBindings.a resolves the inherited slots to the
-# original prelinked code with absolute symbols instead. The archive is attached
-# explicitly because no config flag pulls it onto the link line.
+# ShengUfs subclasses IOBlockStorageDevice, which is not part of XNU: it ships
+# in the prelinked IOStorageFamily kext. build-sheng-source-storage.py compiles
+# the class from Apple's published sources together with the driver, so this
+# kernel carries one real implementation and registers no duplicate OSMetaClass.
 #
-# libVerifiedRoot.a carries the board's verified-root crypto with an empty policy
-# table until a signed bundle exists.
+# That replaces an earlier approach which kept the class out of the kernel and
+# bound the inherited slots to absolute addresses in the prelinked kext instead
+# (libStorageBindings.a, from scripts/prelink-storage-bindings.json, measured out
+# of an iOS 16 kernelcache). Both cannot be present: with the source classes
+# linked, the static bindings produced seventeen duplicate symbols - the class
+# vtable, its metaclass and gMetaClass, and each inherited method. The bindings
+# archive and that script are therefore gone, and UniXNU-sheng's 26 profile lists
+# the same single source adapter.
 #
-# Neither archive has been re-qualified against the 23F84 storage bindings: the
-# slot layout in scripts/prelink-storage-bindings.json was measured out of the
-# iOS 16.7.16 kernelcache. Treat a slot mismatch at link or first storage access
-# as the expected failure on this path rather than a surprise.
+# libVerifiedRoot.a still carries the board's verified-root crypto and the empty
+# policy table, and is attached explicitly because no config flag pulls it onto
+# the link line.
+#
+# PENDING: the prelinked storage ABI this now relies on has not been exercised on
+# hardware. Treat a vtable-slot mismatch at first storage access as the expected
+# failure on this path rather than a surprise.
 CONFIG_XNU_NATIVE_UFS_ARCHIVE="{tree}/build/sheng-ufs/libShengUfs.a"
-CONFIG_XNU_EXTRA_LD_ARCHIVES="-Wl,-force_load,{tree}/build/io-storage-family/libStorageBindings.a -Wl,-force_load,{tree}/build/verified-root/libVerifiedRoot.a"
+CONFIG_XNU_EXTRA_LD_ARCHIVES="-Wl,-force_load,{tree}/build/verified-root/libVerifiedRoot.a"
 
 # Display. GopFramebuffer presents through the UEFI GOP framebuffer the
 # uefi-myron firmware publishes, but its kernel-side provider is a late archive
