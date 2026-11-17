@@ -6,6 +6,50 @@ build observations on purpose: a green build proves nothing about the phone.
 
 ## 2026-11-17: the vendor ABI was the problem, not the device tree
 
+### The EnvDxe abort was the display configuration
+
+`USE_CUSTOM_DISPLAY_DRIVER` was 0, so the build used `SimpleFbDxe` and the DXE
+stack stopped on
+
+    Synchronous Exception at 0x000C2BE6EC
+    FAR 0x000000017422030
+    ESR : EC 0x25  IL 0x1  ISS 0x00000010
+    Data abort: Synchronous external abort
+
+Computing it against the captured tree:
+
+    myron.dtb  GICD  0x17000000 + 0x10000
+               GICR  0x17080000 + 0x200000      -> ends at 0x17280000
+               ITS   0x17040000 + 0x20000
+    fault     0x17422030 = GICR frame 29 + 0x2030
+
+Frame 29 is far past the sixteen frames the tree describes, and `myron.dtb` and
+`canoe.dtb` declare identical GIC geometry, so the tree was not the difference.
+Setting `USE_CUSTOM_DISPLAY_DRIVER = 1` removed the abort outright and the panel
+initialised, which is the evidence that matters: it was the display path, not
+GIC.
+
+### Why it took five builds to try that
+
+`tools/experiment.py` rewrites the flag from the `--display` input on every
+build:
+
+    lines[i] = re.sub(r"=.*", "= " + ("1" if mode == "custom" else "0"), line)
+
+The workflow default is `display=simple`, so editing the DSC to 1 was silently
+undone each time. The build log printed `dsc: USE_CUSTOM_DISPLAY_DRIVER = 0`
+while the repository said 1, which is what finally made it visible. A dispatched
+run with `-f display=custom` is the only way to build with the vendor display
+driver until that default changes.
+
+### Current state: streaks, not a dead panel
+
+With the vendor DisplayDxe in and songyuanPkg's geometry (1264x2780) the console
+draws as horizontal streaks across the whole panel. That is a stride or size
+mismatch: the panel is initialised and being written to. This phone's measured
+value is 1200x2608 with a 4800-byte stride (SurfaceFlinger), so the geometry is
+back to that; the next boot tests it.
+
 ### Build result of the aston switch
 
 Green. The firmware now contains what the working sibling contains:
