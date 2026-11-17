@@ -69,6 +69,28 @@ BOOT_PROGRESS_SOURCE = '''/* SPDX-License-Identifier: BSD-2-Clause-Patent */
 void boot_progress_poll (void)
 {
 }
+
+/* The storage adapter compiles sheng's package/BootLog.c, which declares these
+ * as __attribute__((weak_import)) and reads them only after testing the
+ * addresses, so "not present" is a supported state. On sheng they are defined
+ * by drivers/QcomIris/kernel/VtHost.cpp, and QcomIris is a component of that
+ * device repository, not of the UniXNU catalog this board builds from. Without a
+ * definition the kernel link fails: every archive is attached with -force_load,
+ * so BootLog.o is always included and its undefined references must resolve.
+ * Zero-initialised definitions keep the counters reading "nothing recorded",
+ * which is exactly what a board with no paravirtual transport and no iris
+ * instrumentation should report. Only the nine the linker named are defined here;
+ * the remaining vt_ symbols BootLog.c mentions are not referenced by any object
+ * in this tree, and defining them would risk a duplicate against a provider. */
+volatile uint32_t vt_paravirt_stage;
+volatile uint32_t vt_paravirt_opens;
+volatile uint32_t vt_paravirt_messages;
+volatile uint32_t vt_paravirt_refused;
+volatile uint32_t vt_host_sessions;
+volatile uint32_t vt_host_frames_in;
+volatile uint32_t vt_host_frames_out;
+volatile uint32_t vt_host_frames_dropped;
+volatile uint32_t vt_host_errors;
 '''
 
 
