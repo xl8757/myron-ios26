@@ -111,6 +111,26 @@ uint64_t cs_native4k_digest_bytes[2];
 uint64_t cs_native4k_chunk_ticks;
 uint64_t cs_native4k_record_ticks;
 
+/* OSKext.cpp's PGO grab path calls these two, which bsd/pgo/profile_runtime.c
+ * defines. That object is compiled - the kernel log shows "CC profile_runtime.o"
+ * - but it does not reach the final link for this configuration, so the
+ * references stay unresolved. Reporting an empty profile is the truthful answer
+ * for a kernel that is not instrumented: the size is zero, so the caller takes
+ * its "no data" path, and the write refuses for the same reason. PGO here is
+ * offline profiling support, not a boot dependency. */
+uint64_t __llvm_profile_get_size_for_buffer_internal(void);
+uint64_t __llvm_profile_get_size_for_buffer_internal(void)
+{
+    return 0;
+}
+
+int __llvm_profile_write_buffer_internal(void *buffer);
+int __llvm_profile_write_buffer_internal(void *buffer)
+{
+    (void)buffer;
+    return -1;
+}
+
 /* prng_random.c's source_corecrypto14_bootstrap() calls this only when the boot
  * kernel collection carries no original com.apple.kec.corecrypto: it looks that
  * kext up first and returns after starting it. On a real boot collection the
