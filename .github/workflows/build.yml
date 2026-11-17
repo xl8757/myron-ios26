@@ -704,6 +704,24 @@ jobs:
           PY
           grep -nE "device = \\(args.device|drivers/ShengUfs/NativeUfs" UniXNU/scripts/build-sheng-source-storage.py
 
+      - name: Fetch, configure and assemble
+        working-directory: UniXNU
+        run: |
+          chmod +x unixnu
+          ./unixnu fetch -D ../myron-ios26
+          ./unixnu defconfig myron_ios26_defconfig -D ../myron-ios26
+          ./unixnu tree -D ../myron-ios26
+
+      # On the iOS 16 target this asserted that the resolved order equals
+      # patches/xnu/series exactly, because that file was the whole order. It is
+      # not any more: the order is the shared arch + soc + os series, and
+      # patches/xnu/series is the retired iOS 16 rebase.
+      #
+      # Detection is by PATH, not by file name. The two series share about 50
+      # file names (native-arm-pan.patch and friends) but not their contents:
+      # the device copies are rebased onto xnu-8796 and the shared ones onto
+      # xnu-12377. Comparing names would either miss a real double-application or
+      # flag a harmless collision, so compare where each entry came from.
       # kits/XnuPrelink/native_prelink.py inspects an arm64 Mach-O and refuses
       # anything else on one line:
       #     if (magic, cpu, subtype) != (0xfeedfacf, 0x100000c, 0):
@@ -739,24 +757,6 @@ jobs:
           PY
           grep -n "subtype & 0xff" UniXNU/kits/XnuPrelink/native_prelink.py
 
-      - name: Fetch, configure and assemble
-        working-directory: UniXNU
-        run: |
-          chmod +x unixnu
-          ./unixnu fetch -D ../myron-ios26
-          ./unixnu defconfig myron_ios26_defconfig -D ../myron-ios26
-          ./unixnu tree -D ../myron-ios26
-
-      # On the iOS 16 target this asserted that the resolved order equals
-      # patches/xnu/series exactly, because that file was the whole order. It is
-      # not any more: the order is the shared arch + soc + os series, and
-      # patches/xnu/series is the retired iOS 16 rebase.
-      #
-      # Detection is by PATH, not by file name. The two series share about 50
-      # file names (native-arm-pan.patch and friends) but not their contents:
-      # the device copies are rebased onto xnu-8796 and the shared ones onto
-      # xnu-12377. Comparing names would either miss a real double-application or
-      # flag a harmless collision, so compare where each entry came from.
       - name: Verify the patch order
         run: |
           python3 - <<'PY'
