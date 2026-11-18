@@ -326,7 +326,16 @@ props = [
 
 [payload]
 volume = "MYRONESP"
-size_mib = 208
+# 48 MiB, not 208. The volume becomes the boot image's ramdisk and lands in the
+# XNU_Payload window the memory map declares (0xF0000000 + 0x3800000 = 56 MiB),
+# so it has to stay inside that. 48 MiB leaves room for the RELEASE kernel
+# (16.6 MiB) plus the FAT overhead and a second entry.
+#
+# 208 MiB was sized for the prelinked fileset, which is 82 MiB and is not what
+# this board boots: DarwinBoot rejects MH_FILESET ("MH_FILESET input is still
+# unsupported by this loader"), so the kernel handed to it is the linked
+# MH_EXECUTE image and the volume only has to carry that.
+size_mib = 48
 loader = "firmware"
 title = "myron iOS 26.5.2 bring-up"
 # DRAM range the ADT hands to XNU. The board has two non-contiguous banks, as
