@@ -977,8 +977,17 @@ jobs:
           test -x "$HOST_CC" || { echo "::error::host compiler missing at $HOST_CC"; ls -la "$HOME/unixnu-linux" || true; exit 1; }
           test -x "$MIGCOM" || { echo "::error::migcom missing at $MIGCOM"; exit 1; }
 
+          # PATH has to carry the CommandLineTools bin, not the prefix root: that is
+          # where setup-toolchain.py puts the gm4, clang and install shims, and flex
+          # needs gm4 to exist or it dies with "fatal internal error, exec of  failed"
+          # because it execs an empty program name. The main kernel step never hits
+          # this because the unixnu driver builds the same PATH itself.
+          export PATH="$CLT/bin:$CLT/../XcodeDefault.xctoolchain/usr/bin:$HOME/unixnu-linux/bin:$PATH"
+          export FLEX=/usr/bin/flex
+          export M4="$CLT/bin/gm4"
+          test -x "$CLT/bin/gm4" || { echo "::error::gm4 shim missing at $CLT/bin/gm4"; exit 1; }
+
           UNIXNU_TOOLCHAIN="$HOME/unixnu-linux" \
-          PATH="$HOME/unixnu-linux/bin:$PATH" \
             python3 scripts/build-fileset-release-reference.py --tree "$tree" --lto 2>&1 | tee release.log
           status=${PIPESTATUS[0]}
 
