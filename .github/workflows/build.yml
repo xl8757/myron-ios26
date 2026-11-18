@@ -785,15 +785,20 @@ jobs:
       #
       # This supplies both: the C that implements the header, and the conf entry that
       # makes the kernel compile it. It is only needed while XNU_BOOT_PROGRESS=1.
-      - name: Supply the boot progress implementation
+      - name: Install the boot progress implementation
         run: |
-          python3 myron-ios26/scripts/build-boot-progress.py --unixnu UniXNU --board myron
+          # build-xnu-4k-baseline.sh runs scripts/build-boot-progress.py at line 98,
+          # with the assembled tree as the working directory, right after it clones
+          # .cache/xnu-work and applies the patch series. That script is not in UniXNU,
+          # so supply ours where the build expects to find it: the tree's own scripts/
+          # directory, which unixnu tree copies from the repository.
           tree=$(ls -d UniXNU/out/myron/*/*/tree | head -1)
-          test -f "$tree/osfmk/kern/boot_progress.c" || {
-            echo "::error::boot_progress.c was not written into the tree"; exit 1; }
-          grep -q 'osfmk/kern/boot_progress.c' "$tree/osfmk/conf/files" || {
-            echo "::error::boot_progress.c is not registered in osfmk/conf/files"; exit 1; }
-          echo "boot progress: source and conf entry in place"
+          test -d "$tree" || { echo "::error::no assembled tree under UniXNU/out"; exit 1; }
+          cp myron-ios26/scripts/build-boot-progress.py "$tree/scripts/build-boot-progress.py"
+          test -f "$tree/scripts/build-boot-progress.py" || {
+            echo "::error::the script did not reach the tree"; exit 1; }
+          echo "boot progress: $tree/scripts/build-boot-progress.py"
+          head -3 "$tree/scripts/build-boot-progress.py"
 
       - name: Let the prelink Mach-O parser read arm64e objects
         run: |
