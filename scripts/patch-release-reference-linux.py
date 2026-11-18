@@ -37,6 +37,23 @@ import sys
 
 ANCHOR = "    args = ['make','-C',str(source),'build','SDKROOT=iphoneos',\n"
 
+
+# The link also stops on the LLVM profile runtime symbols that OSKext.cpp declares
+# and expects compiler-rt to define. libcc_kext.a cannot be built on this runner
+# (prepare-xnu.py libs needs the SDK headers that installhdrs produces, and the
+# reference build does its own copytree without installhdrs), and for a
+# comparison kernel that never runs these two symbols are irrelevant: stub them
+# the same way the native hooks are stubbed. The pattern at the stub site only
+# names native_*, boot_log_* and boot_cache_input_capture, so widen it.
+STUB_OLD = (
+    '    stub_names = sorted(set(re.findall(r\'^\\s+"(_(?:native_[a-z0-9_]+|'
+    'boot_log_[a-z0-9_]+|boot_cache_input_capture))"\', build_log, re.M)))\n'
+)
+STUB_NEW = (
+    '    stub_names = sorted(set(re.findall(r\'^\\s+"(_(?:native_[a-z0-9_]+|'
+    'boot_log_[a-z0-9_]+|boot_cache_input_capture|__llvm_profile_[a-z0-9_]+))"\', build_log, re.M)))\n'
+)
+
 INSERT = """    # Linux hosts have no sysctl/sw_vers, and MakeInc.cmd assigns MEMORY_SIZE and
     # SYSCTL_HW_* with :=, which overrides the environment, so these have to be
     # make arguments. Same values scripts/build-xnu-4k-baseline.sh passes.
@@ -70,7 +87,7 @@ def main() -> int:
 
     text = target.read_text(encoding="utf-8")
 
-    if MARKER in text:
+    if MARKER in text and "__llvm_profile_[a-z0-9_]+))" in text:
         print("%s: already patched" % target.name)
         return 0
 
@@ -87,7 +104,20 @@ def main() -> int:
         print("%s: anchor found, would patch" % target.name)
         return 0
 
-    target.write_text(text.replace(ANCHOR, INSERT, 1), encoding="utf-8")
+    text = text.replace(ANCHOR, INSERT, 1)
+
+    if STUB_OLD in text:
+        text = text.replace(STUB_OLD, STUB_NEW, 1)
+        print("%s: __llvm_profile_* added to the stub pattern" % target.name)
+    else:
+        print(
+            "%s: stub-pattern anchor not found; the profile symbols will be unresolved "
+            "if the link needs them" % target.name,
+            file=sys.stderr,
+        )
+        return 1
+
+    target.write_text(text, encoding="utf-8")
     print("%s: Linux make arguments added to the reference build" % target.name)
     return 0
 
