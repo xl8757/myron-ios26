@@ -630,6 +630,7 @@ def main() -> int:
         common += ["-isysroot", args.sdks]
 
     failures = 0
+    built = []
     for name in OBJECTS:
         source = out / name.replace(".o", ".c")
         if not source.is_file():
@@ -638,13 +639,36 @@ def main() -> int:
                                 capture_output=True, text=True)
         if result.returncode == 0:
             print(f"{name}: ok")
+            built.append(out / name)
         else:
-            # Not fatal: the checker tolerates missing objects, and the kernel build is
-            # what actually has to link. Say so instead of failing the whole build.
+            # Not fatal on its own: the checker tolerates missing objects and the
+            # kernel build is what actually has to link.
             print(f"{name}: not built standalone ({result.stderr.splitlines()[0][:90]})")
             failures += 1
 
-    print(f"boot-progress: {target} and {len(OBJECTS) - failures}/{len(OBJECTS)} objects")
+    # build-xnu-4k-baseline.sh line 106 hashes build/boot-progress/libBootProgress.a into
+    # a stamp that decides whether the objects which call into the progress hooks get
+    # rebuilt. Without the archive the next step dies on FileNotFoundError, so it is
+    # written here rather than left to the kernel makefile.
+    archive = out / "libBootProgress.a"
+    if built:
+        for stale in (archive,):
+            stale.unlink(missing_ok=True)
+        result = subprocess.run(["llvm-ar", "rcs", str(archive)] + [str(o) for o in built],
+                                capture_output=True, text=True)
+        if result.returncode != 0:
+            result = subprocess.run(["ar", "rcs", str(archive)] + [str(o) for o in built],
+                                    capture_output=True, text=True)
+        if result.returncode == 0:
+            print(f"libBootProgress.a: {archive} ({archive.stat().st_size} bytes, {len(built)} objects)")
+        else:
+            print(f"libBootProgress.a: not created ({result.stderr.splitlines()[0][:90]})", file=sys.stderr)
+            return 1
+    else:
+        print("libBootProgress.a: no objects to archive", file=sys.stderr)
+        return 1
+
+    print(f"boot-progress: {target}, {len(built)}/{len(OBJECTS)} objects, archive written")
     return 0
 
 
