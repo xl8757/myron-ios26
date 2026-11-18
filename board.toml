@@ -35,6 +35,12 @@ soc_source = "sm8550"
 # repository at os-profiles/ios-26.5.2-23F84/ until it is contributed to
 # UniXNU/profiles/os/. See MIGRATION.md: the identity is iPad17,3 because the
 # published arm64e prelink pins belong to that kernelcache.
+#
+# Retargeting to iPadOS 17.7.11 (21H461) was investigated and is documented in
+# docs/RETARGET-17.7.11.md. It was not adopted: the sibling port that boots 17.7.11
+# needs 67 files this repository does not have - 27 drivers under package/ and 20
+# build scripts - and the reference repository is documentation rather than a
+# reproducible build. This configuration builds and its prelink emits.
 os_profile = "ios-26.5.2-23F84"
 description = "Redmi K90 Pro Max (myron, SM8850 / Canoe), iOS 26.5.2 target"
 kit = "myron"
@@ -76,8 +82,18 @@ include = [
 # kernel.macho.json for review. Expect a boot that fails at the first rebound
 # kext rather than a working system.
 #
-# PENDING: raise the pairing rate (a RELEASE-LTO native build, or more reviewed
-# anchors in kits/XnuPrelink/fixtures) before treating the output as bootable.
+# --allow-missing is deliberate and it makes this an EXPERIMENTAL image. The
+# native kernel pairs 7726 of 21113 original functions - 36.6% - so a boot is
+# expected to fail rather than to work; the flag lets emit_prelink write the
+# candidate anyway and record every gap in kernel.macho.json. What it produced:
+# 639 unresolved closure references and 1546 stubbed functions.
+#
+# PENDING: raise the pairing rate before treating the output as bootable. The
+# measurement in docs/RETARGET-17.7.11.md and work/BRINGUP-LOG.md says the limit
+# is function granularity, not anchor coverage: the pinned kernelcache is
+# RELEASE-LTO with 21113 functions averaging 2230 bytes, our build is not
+# inlined with 25782 averaging 297 bytes. LTO is not available in this
+# toolchain (cctools-port is built with --disable-lto-support).
 [kernel.prelink]
 extra_args = ["--allow-missing"]
 
