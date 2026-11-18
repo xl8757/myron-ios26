@@ -776,6 +776,25 @@ jobs:
       # arm64e. Everything else about the parser is unchanged, and the caller
       # only reads load commands, segments and symbol names, none of which depend
       # on the pointer-authentication ABI.
+      # zzz-boot-progress.patch declares boot_progress.h and calls it from arm_init,
+      # startup.c, bsd_init, _cnputc and vcputc_options, but it carries neither the
+      # translation unit nor the osfmk/conf/files entry that would build one. UniXNU's
+      # build-xnu-4k-baseline.sh runs scripts/build-boot-progress.py for exactly this
+      # and that file is not in the tree either, so the build stopped at line 98 with
+      # "python3 scripts/build-boot-progress.py failed".
+      #
+      # This supplies both: the C that implements the header, and the conf entry that
+      # makes the kernel compile it. It is only needed while XNU_BOOT_PROGRESS=1.
+      - name: Supply the boot progress implementation
+        run: |
+          python3 myron-ios26/scripts/build-boot-progress.py --unixnu UniXNU --board myron
+          tree=$(ls -d UniXNU/out/myron/*/*/tree | head -1)
+          test -f "$tree/osfmk/kern/boot_progress.c" || {
+            echo "::error::boot_progress.c was not written into the tree"; exit 1; }
+          grep -q 'osfmk/kern/boot_progress.c' "$tree/osfmk/conf/files" || {
+            echo "::error::boot_progress.c is not registered in osfmk/conf/files"; exit 1; }
+          echo "boot progress: source and conf entry in place"
+
       - name: Let the prelink Mach-O parser read arm64e objects
         run: |
           python3 - <<'PY'
