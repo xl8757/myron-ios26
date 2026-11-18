@@ -45,18 +45,3 @@ sheng-platform-power.patch
 # iokit hunk was written against a tree at 2026-11-16 and applies on top of the
 # arm64e series this board already resolves.
 sheng-platform-sleep.patch
-
-# Early screen diagnostics, added 2026-11-18.
-#
-# The board has no serial port and the boot loader's screen is the only channel
-# before the kernel owns a console. Every kernel boot so far has ended with the
-# loader's own text still on screen and nothing after it, which reads identically
-# whether XNU never started, started and died before its console, or started and
-# died in arm_vm_init. This paints stage markers straight into the framebuffer from
-# the earliest code that runs, so a photo says which one happened.
-#
-# Adapted from ios-sweet, which solved the same problem the same way, with this
-# board's framebuffer (0xfc800000, 1200x2608) instead of theirs (0x9c000000,
-# 1080x2400). Requires CONFIG_XNU_MYRON_EARLY=y: without it the header compiles the
-# calls away and the patch is inert.
-myron-early-console.patch
