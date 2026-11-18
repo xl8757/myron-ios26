@@ -965,27 +965,40 @@ jobs:
           # scripts/build-xnu-4k-baseline.sh passes on Linux, and fails loudly if
           # upstream moves the anchor.
           python3 ../myron-ios26/scripts/patch-release-reference-linux.py --mu-root .
-          # setup-toolchain.py installs into <prefix>/CommandLineTools/usr, not
-          # <prefix> directly: line 371 of that script is
-          #   clt = prefix / 'CommandLineTools/usr'
-          # and xnu-host-cc and migcom go under clt/bin and clt/libexec. Getting this
-          # wrong makes make fail on a missing host compiler before any real work.
-          CLT="$HOME/unixnu-linux/CommandLineTools/usr"
+          # The reference script is not run through `unixnu`, so it does not inherit the
+          # environment scripts/unixnu/kernel.py builds for the normal kernel step.
+          # Those variables are what make the clang wrapper work at all: it execs
+          # ${CROSS_CLANG:-/opt/unixnu-linux/llvm/bin/clang} and the default does not
+          # exist here, which is exactly the 'clang: line 32: /opt/unixnu-linux/llvm/
+          # bin/clang: No such file or directory / exit 127' this step hit. The values
+          # below are kernel.py lines 102-109, read from that file.
+          TOOLCHAIN="$HOME/unixnu-linux"
+          CLT="$TOOLCHAIN/CommandLineTools/usr"
+          XCTOOLCHAIN="$TOOLCHAIN/XcodeDefault.xctoolchain/usr"
+          FAKEROOT="$tree/.cache/fakeroot"
+
+          export LC_ALL=C
+          export CLT_PREFIX="$CLT"
+          export XCTOOLCHAIN_PREFIX="$XCTOOLCHAIN"
+          export XNU_TOOLCHAIN_BIN="$CLT/bin $XCTOOLCHAIN/bin"
+          export UNIXNU_SDKROOT="$FAKEROOT"
+          export UNIXNU_SDK_VERSION=17.0
+          export UNIXNU_PLATFORM_PATH="$FAKEROOT/Platforms/iPhoneOS.platform"
+          export CROSS_CLANG="$TOOLCHAIN/llvm/bin/clang"
+          export DARWIN_TRIPLE=arm64-apple-ios17.0
+          export CROSS_EXTRA_FLAGS='-mllvm -disable-atexit-based-global-dtor-lowering'
+          export CCC_OVERRIDE_OPTIONS='# +-Wno-missing-designated-field-initializers +-Wno-unused-but-set-global'
           export PLATFORM=iPhoneOS
           export HOST_CC="$CLT/bin/xnu-host-cc"
           export MIGCOM="$CLT/libexec/migcom"
-          test -x "$HOST_CC" || { echo "::error::host compiler missing at $HOST_CC"; ls -la "$HOME/unixnu-linux" || true; exit 1; }
-          test -x "$MIGCOM" || { echo "::error::migcom missing at $MIGCOM"; exit 1; }
-
-          # PATH has to carry the CommandLineTools bin, not the prefix root: that is
-          # where setup-toolchain.py puts the gm4, clang and install shims, and flex
-          # needs gm4 to exist or it dies with "fatal internal error, exec of  failed"
-          # because it execs an empty program name. The main kernel step never hits
-          # this because the unixnu driver builds the same PATH itself.
-          export PATH="$CLT/bin:$CLT/../XcodeDefault.xctoolchain/usr/bin:$HOME/unixnu-linux/bin:$PATH"
-          export FLEX=/usr/bin/flex
           export M4="$CLT/bin/gm4"
-          test -x "$CLT/bin/gm4" || { echo "::error::gm4 shim missing at $CLT/bin/gm4"; exit 1; }
+          # flex execs gm4 by name, so the CLT bin has to be on PATH, not just the
+          # toolchain root.
+          export PATH="$CLT/bin:$TOOLCHAIN/bin:$PATH"
+
+          for f in "$CROSS_CLANG" "$HOST_CC" "$MIGCOM" "$M4"; do
+            test -x "$f" || { echo "::error::missing toolchain file: $f"; exit 1; }
+          done
 
           UNIXNU_TOOLCHAIN="$HOME/unixnu-linux" \
             python3 scripts/build-fileset-release-reference.py --tree "$tree" --lto 2>&1 | tee release.log
