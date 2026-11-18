@@ -45,26 +45,6 @@ OUT = ROOT / 'build/verified-root'
 ARCHIVE = OUT / 'libVerifiedRoot.a'
 RECIPE = ROOT / 'build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/osfmk/DEVELOPMENT/prng_random.o.json'
 
-def boot_progress_mode(root: Path) -> int:
-    """Whether the kernel is being built with XNU_BOOT_PROGRESS.
-
-    The stub below must not define boot_progress_poll when the tree does, or the link
-    fails on a duplicate symbol. The value reaches every step as the XNU_BOOT_PROGRESS
-    environment variable - kernel.py turns CONFIG_XNU_<NAME> into XNU_<NAME>, and
-    build-xnu-4k-baseline.sh reads it from there - so read the environment rather than
-    looking for it in a file it never reaches. The .config fallback covers a local run
-    where the variable is not exported.
-    """
-    value = os.environ.get('XNU_BOOT_PROGRESS')
-    if value is not None:
-        return 1 if value.strip() in ('1', 'y', 'Y', 'true') else 0
-    for candidate in (root / '.config', root / 'build/xnu/.config'):
-        if candidate.is_file():
-            for line in candidate.read_text(encoding='utf-8', errors='replace').splitlines():
-                name, _, value = line.strip().partition('=')
-                if name in ('XNU_BOOT_PROGRESS', 'CONFIG_XNU_BOOT_PROGRESS'):
-                    return 1 if value.strip() in ('1', 'y', '"1"') else 0
-    return 0
 
 
 BOOT_PROGRESS_SOURCE = '''/* SPDX-License-Identifier: BSD-2-Clause-Patent */
@@ -74,17 +54,25 @@ BOOT_PROGRESS_SOURCE = '''/* SPDX-License-Identifier: BSD-2-Clause-Patent */
  * it only while verifying a root window; an observer that observes nothing is
  * the right definition until a board diagnostic supplies a real one. */
 /*
- * When the kernel is built with XNU_BOOT_PROGRESS the tree supplies a real
- * boot_progress_poll in osfmk/kern/boot_progress.c, and defining it here as well
- * would be a duplicate symbol at link time. This archive is attached with
- * -force_load, so its objects are always included; guard the weak-shaped no-op
- * instead of dropping the object, which also carries the vt_ counters below.
+ * Weak on purpose. NativeUfs declares this weak_import and calls it only from inside
+ * the verification path, so a no-op is a correct definition for a board with no
+ * diagnostics. When the kernel is built with XNU_BOOT_PROGRESS the tree also defines
+ * it, in osfmk/kern/boot_progress.c, and this archive is attached with -force_load so
+ * this object is always included - a strong definition here is then a duplicate
+ * symbol, which is exactly how the XNU_BOOT_PROGRESS=1 build failed:
+ *
+ *   duplicate symbol '_boot_progress_poll' in:
+ *     .../osfmk/DEVELOPMENT/boot_progress.o
+ *     .../libVerifiedRoot.a(boot-progress-stub.o)
+ *
+ * Weak is the mechanism that works without the two steps guessing at each other's
+ * configuration: a strong definition anywhere else wins silently, and this one still
+ * shows as a defined symbol to the nm check below, so the archive's own assertion
+ * keeps passing whether or not the kernel supplies a real implementation.
  */
-#if !defined(XNU_BOOT_PROGRESS) || !XNU_BOOT_PROGRESS
-void boot_progress_poll (void)
+__attribute__((weak)) void boot_progress_poll (void)
 {
 }
-#endif
 
 /* The storage adapter compiles sheng's package/BootLog.c, which declares these
  * as __attribute__((weak_import)) and reads them only after testing the
@@ -282,10 +270,6 @@ def main() -> int:
             fail(f'missing {source}')
         destination = OUT / (source.stem + '.o')
         command = command_for(record, source, destination, includes)
-        # Tell the stub whether the tree defines boot_progress_poll for real. The
-        # kernel build passes the same value to every object, so the two agree.
-        if 'XNU_BOOT_PROGRESS' not in ' '.join(command):
-            command = command + ['-DXNU_BOOT_PROGRESS=' + str(boot_progress_mode(ROOT))]
         print('compile %s suffix=%r lang=%s' % (source.name, source.suffix, 'c++' if source.suffix == '.cpp' else 'c'))
         if source.suffix == '.cpp':
             command = as_cxx(command, source)
