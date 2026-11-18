@@ -1035,15 +1035,21 @@ jobs:
             sha256sum "$built"
           fi
 
-          # Compare the function counts the two configurations produce. This is
-          # the number that decides whether pairing improves.
+          # Compare what the two configurations produce. The number that matters is the
+          # defined text symbols: prelink pairs function bodies, so this is the
+          # denominator against Apple's 21113.
+          #
+          # No -arch here: that is cctools' flag and the nm on PATH is GNU nm, which
+          # rejects it and printed 0 for both kernels on the first run. GNU nm reads the
+          # Mach-O fine with --defined-only, and the leading '_' it prints is the Mach-O
+          # convention, which is also how the prelink emitter names things.
           dev=$(find out -name 'mach.development.bcm2837.unstripped.noctf' -type f 2>/dev/null | head -1)
-          if [ -n "$built" ] && [ -n "$dev" ]; then
-            for f in "$dev" "$built"; do
-              n=$(nm -arch arm64e --defined-only "$f" 2>/dev/null | grep -c ' [Tt] ' || true)
-              echo "$(basename "$f"): $n text symbols ($(wc -c < "$f") bytes)"
-            done
-          fi
+          for f in "$dev" "$built"; do
+            [ -n "$f" ] || continue
+            n=$(nm --defined-only "$f" 2>/dev/null | grep -Ec ' [Tt] ' || true)
+            total=$(nm --defined-only "$f" 2>/dev/null | wc -l || true)
+            echo "$(basename "$f"): $n defined text symbols, $total symbols total ($(wc -c < "$f") bytes)"
+          done
 
           if [ "$status" -ne 0 ]; then
             echo "::error title=RELEASE-LTO reference build failed::status $status; the compile log is in the kernel-release-reference artifact. This step does not gate the kernel, but a failing reference build means the pairing question is still unanswered."
