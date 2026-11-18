@@ -1,5 +1,190 @@
 # Bring-up log
 
+## 2026-11-18: the payload cannot ride in the firmware volume either
+
+The fixed-address route is exhausted and so is the embedded route. Both failures
+are structural, and both are recorded here so the next attempt starts from the
+measurements rather than from another guess.
+
+### The address route: six probes, no payload anywhere
+
+`fastboot boot` and a flashed `boot_a` with a normal restart were both tried.
+Both behaved identically: `x0 = 0` at handoff, so no FDT, so no
+`/chosen/linux,initrd-start`. The driver fell back to fixed addresses and every
+one of them came up empty:
+
+    0x01000000  faults - below DRAM_BASE 0x80000000, so it is MMIO
+    0x81000000  never probed with a correct image (see below)
+    0xA6F00000  Initrd_Small, empty
+    0xF0000000  XNU_Payload, empty
+    0xB8000000  DXE_Heap, empty
+    0xA8000000  Kernel, empty
+    0xF8800000  OEM_VM_REGION, empty
+
+The `0x01000000` entry is worth keeping: it is the raw value of the boot image's
+`ramdisk_addr` field, and reading it raises a synchronisation exception inside
+this driver. `MemoryMapLib` does not declare it, and DRAM starts at 0x80000000,
+so the read faults rather than returning data. An earlier note in
+`make_payload.py` said "0x01000000 is not mapped on this platform" and moved the
+address away - true, but it describes the UEFI page tables, not what the
+bootloader did.
+
+The stock images explain the confusion. `vendor_boot.img` carries
+`kernel_addr = 0x8000` and `ramdisk_addr = 0x1000000`, neither of which is a DRAM
+address, yet that image boots. So the bootloader adds `DRAM_BASE` itself and the
+ramdisk would be at `0x80000000 + 0x1000000 = 0x81000000`. **That address was
+never tested with a clean image** - the one build that carried it
+(`79b3335`) also carried the vendor DXE set, and it stopped in `EnvDxe` before
+the probe could run.
+
+### The embedded route: FvMain needs more RAM than it has
+
+`myron.fdf` puts the payload in `FvMain` as a FREEFORM RAW section, and
+`FvMain` is LZMA-compressed into `FVMAIN_COMPACT`, which is what the FD holds.
+The FD therefore only pays the compressed size - 11 MiB of payload with a
+9.84 MiB kernel is about 2.78 MiB on flash - which is why the volume was grown
+from 3 MiB to 5 MiB and the kernel embedded in it.
+
+That reasoning stopped one step too early. **SEC has to decompress `FvMain` into
+RAM before anything inside it can be reached**, and the decompressed size is the
+uncompressed one:
+
+| payload in FvMain | FvMain decompressed | FD | outcome |
+| --- | --- | --- | --- |
+| 1 MiB | about 3 MiB | 3 MiB | menu appears |
+| 16 MiB | about 18 MiB | 5 MiB | black screen, falls back to Android |
+
+The memory map has no 18 MiB window for it: `FV_Region` is 4 MiB,
+`Sched_Heap` 4 MiB, `UEFI_RESV` 1.2 MiB. Decompression fails, no DXE driver
+loads, and the phone black-screens. This is not a configuration error to tune -
+`FvMain` cannot hold a kernel-sized payload on this board at all.
+
+The FDF comment says the same thing from the other side: the payload section sits
+in `FvMain` because `UniXNURamDiskDxe` looks it up with `GetSectionFromAnyFv`,
+which can only find firmware volumes that already have the FV2 protocol
+installed. `FVMAIN_COMPACT` is the SEC decompression layer and is not one of
+them, so moving the payload there instead is not a drop-in change.
+
+### Two more corrections worth keeping
+
+The FD base moved from 0xA7100000 to 0xA6F00000 in one attempt, to absorb
+`Initrd_Small`. That is where the bootloader puts the boot image ramdisk, and the
+copied firmware landed on live data; the phone black-screened. The volume grows
+upward from 0xA7100000 now, and `Initrd_Small` and `FD_Reserved` are back in the
+map.
+
+Three tool inputs hardcoded the old geometry and failed only after a successful
+compile: the FD size assertion in the workflow, `check_artifacts.py`'s
+`FD_BASE`/`FD_SIZE` constants, and `make_payload.py`'s `refd` size check. All
+three read `Resources/Configs/myron.toml` now. The release notes do not record
+`vendor`, so a published FD cannot be told apart from a `vendor=none` build by
+its tag - another reason to read the setting from the config rather than copy a
+number.
+
+### What is built and verified, and what is not
+
+Built and checked offline: the stripped 9.84 MiB MH_EXECUTE kernel is inside a
+16 MiB FAT12 payload volume (`KERNEL.BIN`, Mach-O magic at offset 80384), and
+that volume is inside a 5,242,976-byte FD whose base and size match
+`myron.toml`. The CI chain builds it end to end. What is not verified is that
+any of it reaches the kernel: the volume is in `FvMain`, and `FvMain` cannot be
+decompressed here.
+
+The device is back on Android, slot `a`, `/data` intact, `boot_a` stock and
+`boot_b` holding a probe image. Nothing on the phone was modified in place.
+
+
+## 2026-11-18: the kernel payload is never read, and the log says so exactly
+
+Two boots with the corrected firmware (`vendor=none`, ramdisk address
+0xF0000000, 28 MiB payload carrying the 16.6 MiB kernel) reached the UniXNU menu
+and showed **one entry, `Hello payload`**. The log explains it:
+
+    UNIXNURAMDISK: x0 0x0 is not a device tree
+    UNIXNURAMDISK: nothing at 0xF0000000 either
+    UNIXNURAMDISK: payload volume at 0xC23CE018, 1048576 bytes
+    UNIXNURAMDISK: block device 0xC23CE018 size 0x100000 Success
+
+So the bootloader placed no payload at 0xF0000000, and the driver fell back to
+the 1 MiB volume baked into the firmware volume by `myron.fdf` - which contains
+`unixnu.toml` and HELLO.EFI, no kernel. Everything above that is healthy: the
+menu renders at 1200x2608, reads `\EFI\UniXNU\unixnu.tom` successfully, and
+boots HELLO.EFI to `returned Success`.
+
+The first attempt at this was my own mistake and is in the log above: I
+dispatched the firmware build without `vendor=none`, so it stopped in `EnvDxe`
+before any of this could be exercised.
+
+### What the mechanism actually is
+
+`docs/porting/uefi-firmware.md` states it: the Android bootloader places the FAT
+payload in RAM and writes `/chosen/linux,initrd-start` and `linux,initrd-end`
+into the firmware FDT. `Mu-Silicium` SEC preserves the incoming FDT address in
+the entry-argument HOB, and `UniXNURamDiskDxe` reads it from there.
+
+That path is closed on this board: `x0` is 0 at handoff, so there is no FDT, no
+`/chosen`, and no initrd properties. The driver's fixed-address fallback exists
+precisely because of this, and the fallback address is the only lever.
+
+Whether the bootloader honours the header's `ramdisk_addr` at all is the open
+question, and one address cannot answer it: a miss at 0xF0000000 means either
+"it loaded the ramdisk somewhere else" or "it loaded no ramdisk".
+
+### The probe, and a bug in it worth recording
+
+`PublishFallback` now walks a list of addresses in declared DRAM and logs which
+hold a FAT volume. The first version of that list was wrong:
+
+| address | verdict |
+| --- | --- |
+| 0xD0000000 | **not mapped** - the read itself faults |
+| 0xE0000000 | **not mapped** - same |
+| 0x90000000 | inside `MPSS_REGION` - mapped, but modem firmware |
+
+Checking the candidates against `MemoryMapLib` before building caught this.
+Reading an unmapped address would have reset the platform before the diagnostic
+could be read, which is the worst possible outcome for a probe: no information
+and no evidence. The six that remain are all inside declared regions -
+`Initrd_Small`, `XNU_Payload`, `DXE_Heap`, `Kernel`, `OEM_VM_REGION` and
+`Display_Reserved`.
+
+PENDING: the probe's output. A hit at an unexpected address means the ramdisk is
+being loaded elsewhere and the driver only has to look there; no hits at all
+means no ramdisk arrives and the payload has to come from somewhere else.
+
+
+## 2026-11-18: the first kernel payload boot failed in firmware, on my own mistake
+
+The image carried the 16.6 MiB MH_EXECUTE kernel inside a 28 MiB FAT volume loaded
+at 0xF0000000, which is what the previous section set out to build. It never got
+that far: the phone stopped in firmware with
+
+    ASSERT_RETURN_ERROR (Status = Not Found)
+    ASSERT AutoGen.c +652: !RETURN_ERROR (Status)
+    _ock handle not initializedASSERT spinlock.c +108: Lock handle not initialized
+
+That is `EnvDxe`, and it is the same failure this log already recorded when the
+vendor DXE set is loaded on this board.
+
+**Cause: I dispatched the firmware build without `vendor=none`.** The workflow's
+default is `vendor=full`, which pulls in all 219 vendor inputs and 53 extra DXE
+modules; the configuration that reaches the UniXNU menu is `vendor=none`, 52
+modules. The dispatch I ran to pick up the 0xF0000000 changes passed only
+`display=simple`, so it built the configuration known to stop in `EnvDxe`. The
+address work was never exercised.
+
+The lesson is not subtle but it is worth writing down: **the firmware dispatch
+parameters are part of the configuration, and the default is the one that
+crashes.** `vendor=none` has to be named explicitly on every dispatch that is
+meant to reach the menu, or the build silently produces the crashing variant.
+The build log shows no `vendor = none` line, which is the tell; a correct build
+prints it.
+
+Rebuilt with `display=simple vendor=none`, keeping the 0xF0000000 ramdisk
+address, the driver's fallback base, the FAT12 cluster size of 16 sectors and the
+8.3 `KERNEL.BIN` name. PENDING: boot that one.
+
+
 ## 2026-11-18: the 17.7.11 retarget ended in a reversal, and what it taught
 
 Detail: `docs/RETARGET-17.7.11.md`. Short version here because the log is the
