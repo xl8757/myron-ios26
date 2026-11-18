@@ -59,6 +59,15 @@ CONFIG_XNU_DT_PANIC_REGION=y
 # _cnputc and vcputc_options that route console output to it. This switch is the one
 # build-xnu-4k-baseline.sh wires itself (XNU_BOOT_PROGRESS, line 86), so no device
 # patch is needed and none is added.
+#
+# It carries three prerequisites (build-xnu-4k-baseline.sh line 91-97):
+#   XNU_NATIVE_UFS=1          already set above
+#   XNU_OWNER_ROOT_AUDIT=1    set here
+#   XNU_SOURCE_CORECRYPTO14=1 set here
+# The audit itself is allowed because XNU_SOURCE_STORAGE=1 is already on: line 298
+# only rejects an audit without real owner-verified block crypto.
+CONFIG_XNU_OWNER_ROOT_AUDIT=y
+CONFIG_XNU_SOURCE_CORECRYPTO14=y
 CONFIG_XNU_BOOT_PROGRESS=y
 # Supplies the cs_native4k_* counters the vendored BootLog.c references; see the
 # note above.
