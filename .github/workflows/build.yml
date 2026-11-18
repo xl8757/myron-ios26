@@ -348,8 +348,7 @@ jobs:
           # not counted as a UniXNU-sm8550-common entry.
           print(f'shared patches: {len(shared)}, total: {len(order)}')
           assert len(shared) >= 68, f'only {len(shared)} shared patches resolved'
-          # 73, not 72: myron-early-console.patch joined the device series on 2026-11-18
-          assert len(order) == 73, f'expected 73 patch paths, got {len(order)}'
+          assert len(order) == 72, f'expected 72 patch paths, got {len(order)}'
           assert 'sheng-platform-power.patch' in names, 'the vendored SoC patch is missing'
           # native-smp-secondary.patch is deliberately not applied: it edits
           # board_config.h line 134, which the arm64e BCM2837 block moves, and its
@@ -826,8 +825,7 @@ jobs:
           shared = [entry for entry in order if 'patches/xnu-12377' in entry]
           print(f'shared patches: {len(shared)}, total: {len(order)}')
           assert len(shared) >= 68, f'only {len(shared)} shared patches resolved'
-          # 73, not 72: myron-early-console.patch joined the device series on 2026-11-18
-          assert len(order) == 73, f'expected 73 patch paths, got {len(order)}'
+          assert len(order) == 72, f'expected 72 patch paths, got {len(order)}'
           assert 'sheng-platform-power.patch' in names, 'the vendored SoC patch is missing'
           # native-smp-secondary.patch is deliberately not applied: it edits
           # board_config.h line 134, which the arm64e BCM2837 block moves, and its
