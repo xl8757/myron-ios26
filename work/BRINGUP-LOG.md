@@ -1,5 +1,136 @@
 # Bring-up log
 
+## 2026-11-18: the 17.7.11 retarget ended in a reversal, and what it taught
+
+Detail: `docs/RETARGET-17.7.11.md`. Short version here because the log is the
+record of what was actually done.
+
+The day moved the target to iPadOS 17.7.11, edited `board.toml` to match
+(`os_profile`, `chip_id 8011`, the device patch series removed, `--allow-missing`
+dropped), then moved it back. The edit was 5 substitutions; the revert is the
+same 5 with the reasoning attached, and `board.toml` is semantically identical to
+what it was before (verified by comparing parsed TOML, not text).
+
+### Why it was attempted
+
+The sibling port for this exact phone boots 17.7.11 to SpringBoard, on a
+DEVELOPMENT kernel, without `--allow-missing`. 23F84's whole difficulty - the
+RELEASE comparison image, the split-seg fix, the 41.2% pairing ceiling - does not
+appear in that configuration at all.
+
+### Why it was abandoned
+
+Adopting it needs 67 files this repository does not have: 27 C/C++ sources under
+`package/` (touch, GPU, display, input, keystore, command DB, PMGR, boot
+progress) and 20 build scripts. The reference repository cannot be used as a
+drop-in either - it is documentation, not a reproducible build:
+
+    build-native-aes-bindings.py       named in its board.toml, absent from the tree
+    build-native-virtio-bindings.py    same
+    scripts/data/                      empty, so myron-observed.json is missing
+    songyuanPkg/songyuan.dec           0 bytes
+    XNU patch series                   not carried
+
+`aogg2023/songyuan-uefi` does supply `songyuanPkg` in full (17 files), so the
+firmware side was recoverable; the driver and script side was not.
+
+### What the reading confirmed, and one correction
+
+`scripts/make-myron-adt.py` is the generator that reached SpringBoard on this
+phone, and its constants are exactly what `dts/myron-handoff.dts` already
+carries: GIC distributor `0x17000000`, redistributor `0x17080000` size
+`0x200000`, stride `0x40000`, timebase `19200000`, DRAM base `0x80000000`. Our
+device tree was copied from it correctly.
+
+Its `--cpu-regs` defaults to `'0'` - a single boot core - and the README says
+secondary CPUs need a specific XNU patch and `sheng-smp=1`. **So a one-CPU tree
+is the intended first-boot configuration.** That retracts an inference recorded
+earlier in this log: the `EnvDxe` fault at `FAR 0x17422030` was read as a GICR
+walk past the declared window (frame 29 at a 0x20000 stride). At the real stride
+of 0x40000 it is frame 14, and one core is documented as correct, and the fault
+is observed to track the display configuration rather than the GIC. The GIC
+arithmetic was a coincidence.
+
+### Net state
+
+Nothing new reached the phone today. What changed in the repository: one new
+document, one new finding in `porting.toml`, and a `board.toml` that says why it
+did not move. The iOS 26 configuration still builds, still prelinks, and still
+produces a candidate whose own manifest says `loadable: false`.
+
+
+## 2026-11-18: decision - retarget to iPadOS 17.7.11
+
+This is the point where the iOS 26.5.2 / 23F84 target stops being the plan.
+
+### What forced it
+
+Reading the sibling port for the same phone settled a question I had been
+answering from the wrong end. `aogg2023/songyuan-device` is the Redmi K90 Pro Max
+- same `kit = "myron"`, same `Platforms/Xiaomi/myronPkg`, same SM8850 - and its
+README says it boots to SpringBoard, with touch, Adreno 840 Metal and a
+persistent Data store. Two things about how it does that matter:
+
+| | songyuan (boots) | myron-ios26 (ours) |
+| --- | --- | --- |
+| OS target | **iPadOS 17.7.11 (21H461)** | iOS 26.5.2 (23F84) |
+| Identity | iPad7,1 / j120ap | iPad17,3 / j820ap |
+| `[kernel.prelink].kernel` | DEVELOPMENT | RELEASE (changed by me this week) |
+| `--allow-missing` | not used | used |
+| prelink kit | NativePrelink | XnuPrelink - **the same repository** |
+
+`NativePrelink` and `XnuPrelink` turned out to be identical: `emit_prelink.py`,
+`fileset_match.py` and `kc_image.py` have the same sha256 in both. The repo was
+renamed. So the tooling was never the difference - the OS target is.
+
+### Why 23F84 was the wrong hill
+
+UniXNU's support for 17.7.11 is complete and exercised: `profiles/os/ipados-17.7.11-21H461`
+carries the kernelcache pin, the 31 roots, `early_security_init`, the trust cache
+hashes, the payload `text_fixups`, and the whole ATD identity block. Its fixture
+set has mature anchors.
+
+23F84 has `profiles/os/ipados-26.5.2-23F84` too, but the 23F84 fixture is 108
+functions. I did fetch it, and it did help - `stubbed functions` fell from 2018
+to 1546 and `kext-facing targets named` rose by 86 - but it cannot close a
+pairing ratio that is limited by something else:
+
+    Apple kernelcache : 21113 functions, 2885 diversities, __TEXT_EXEC 44.9 MiB
+    our RELEASE kernel: 25782 functions,  811 diversities, __TEXT_EXEC  7.3 MiB
+    average function  : 2230 bytes vs 297 bytes
+
+Our functions are 7.5x smaller on average. Apple's kernelcache is RELEASE-LTO, so
+its functions are the result of link-time inlining; ours are not inlined and
+there are more of them. Matching function *shapes* across that difference has a
+ceiling, and no amount of anchors reaches it. LTO is the only thing that would
+change the shapes, and this toolchain builds cctools-port with
+`--disable-lto-support`.
+
+But the decisive point is not that LTO is hard. It is that **the port that boots
+does not use RELEASE or LTO at all.** It uses a DEVELOPMENT kernel, no
+`--allow-missing`, and a complete 17.7.11 profile. So chasing LTO would have been
+solving a problem the working configuration does not have.
+
+### What this costs, honestly
+
+- The kernel source changes from xnu-12377 to xnu-10063 - a different tree, and
+  the arm64e patch series is per-version.
+- `patches/xnu26/sheng-platform-sleep.patch` and the other iOS 26 device patches
+  do not apply to 17.7.11.
+- The iPad7,1 IPSW has to be fetched (~10 GB, ZIP64 with a usable Range
+  endpoint, so only the KernelCache member is needed).
+- The `--allow-missing` prelink work and the split-seg fix were for the RELEASE
+  path; the DEVELOPMENT path is what the working port uses.
+
+What carries over unchanged: the UEFI platform package (`myronPkg` boots to its
+boot manager and has been verified on the phone), the component set, and every
+firmware observation recorded in this log.
+
+The iOS 26 work is not deleted. It is parked in this log and in `porting.toml`,
+because if UniXNU's 23F84 support matures the same board file can point back at
+it.
+
+
 ## 2026-11-18: split-seg info restored, prelink emits, pairing reaches 41.2%
 
 The blocker from the previous section is fixed. `-Wl,-add_split_seg_info` now
