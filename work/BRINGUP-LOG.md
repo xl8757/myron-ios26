@@ -1,5 +1,82 @@
 # Bring-up log
 
+## 2026-11-18: the pairing ratio, measured against the real kernelcache
+
+First real pairing numbers. Everything before this section reported 32% from the
+DEVELOPMENT image; this is the RELEASE comparison kernel against the actual
+23F84 kernelcache.
+
+    Apple kernelcache  : 21113 functions, 2885 diversities
+    our RELEASE kernel : 25782 functions,    0 diversities
+
+Both pairing paths ran:
+
+| path | paired | ratio | what carried it |
+| --- | --- | --- | --- |
+| default (hash + strings) | 6289 / 21113 | **29.8%** | 3595 string anchors, 376 PAC-shaped, 2111 calls, 16 data-users |
+| reference (RELEASE as comparison) | 7726 / 21113 | **36.6%** | 5147 order anchors, 373 symbol anchors, 1364 strings, 668 calls, 111 pure leaves |
+
+Against DEVELOPMENT for the same kernelcache:
+
+    DEVELOPMENT: 29411 functions, 6805 paired = 32.0%
+    RELEASE    : 25782 functions, 7726 paired = 36.6%
+    delta      : +921 functions, +4.6 points
+
+The more telling number is `kext-facing targets named`: 490/3094 on the default
+path, 972/3094 on the reference path. That doubled, and it is the measure that
+matters for binding kexts, not the raw function ratio.
+
+### Getting the kernelcache right was most of the work
+
+The file already on disk (`kernelcache.release.ipad17`, sha256 `ff7b0996...`) was
+the IM4P container, not the kernelcache. `profile.toml` pins the *decompressed*
+arm64 slice (`0f7d50ac...`), which is why the hashes never matched. The chain is:
+
+    IMG4 SEQUENCE  ->  OCTET STRING payload  ->  LZFSE ("bvx2")  ->  Mach-O
+
+Decompressing it with `liblzfse` (the import name is `liblzfse`, not the package
+name `pyliblzfse`) gives 74,219,520 bytes with sha256 `0f7d50ac1bfc...`, exactly
+the profile value. That image is `filetype 12` MH_FILESET with `arm64e`
+cpusubtype and 311 load commands.
+
+Finding it in the IPSW without downloading 10.4 GB: the file supports HTTP Range
+(206) even though HEAD reports no `Accept-Ranges`, and the archive is ZIP64, so
+the central directory lives at `cd_off = 0xFFFFFFFF` in the classic EOCD and has
+to be read from the ZIP64 locator. With that, `kernelcache.release.ipad17` sits
+at local header offset 10,422,143,265, 22,569,956 compressed.
+
+### It cannot emit an image yet
+
+`emit_images` stops with:
+
+    ValueError: Native image has no split-segment relocation information
+
+`fileset_layout.split_references` reads load command 0x1e (`LC_SEGMENT_SPLIT_INFO`)
+and **neither binary has it**: not our RELEASE kernel (25 load commands,
+`LC_SYMTAB` only) and not Apple's kernelcache (311 commands, `LC_DYLD_EXPORTS_TRIE`
+and no symtab). So pairing is computable but the emitted image is not.
+
+### What the numbers say about the real problem
+
+`diversities = 0` on our side against 2885 on Apple's. Diversities come from the
+compiler's function-signature hashing, and a build that produces none is not
+producing comparable signatures at all. That is a different and deeper problem
+than anchor coverage: more reviewed anchors cannot fix it, because the shapes
+being compared were computed by a different scheme. Raising the ratio further
+means making our clang emit the same signature scheme, which is a toolchain
+question rather than a pairing one.
+
+This also keeps `board.toml`'s warning honest: "Expect a boot that fails at the
+first rebound kext rather than a working system." 36.6% with zero diversities
+does not contradict it.
+
+### Where the RELEASE work still paid off
+
+Independently of pairing, the RELEASE kernel is 15.8 MiB (MH_EXECUTE,
+`arm64e`, 172,141 symbols) against DEVELOPMENT's 23.3 MiB. The 56 MiB
+`XNU_Payload` window was blocking any boot test; that block is gone.
+
+
 ## 2026-11-18: the RELEASE comparison kernel builds
 
 `scripts/build-fileset-release-reference.py` now runs to completion on the Linux
