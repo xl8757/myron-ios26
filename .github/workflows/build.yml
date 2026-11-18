@@ -978,7 +978,14 @@ jobs:
           fi
 
           if [ "$status" -ne 0 ]; then
-            echo "::warning::RELEASE-LTO reference build failed; see release.log (this is a measurement step, not a gate)"
+            echo "::error title=RELEASE-LTO reference build failed::status $status; the compile log is in the kernel-release-reference artifact. This step does not gate the kernel, but a failing reference build means the pairing question is still unanswered."
+            # Show the first compiler error here so the job page says what broke
+            # without needing the artifact.
+            fail_log=$(find "$tree/build/xnu/fileset-reference" -name '*-build.log' | head -1)
+            if [ -n "$fail_log" ]; then
+              echo "--- first errors from $fail_log ---"
+              grep -nE 'error:|Error ' "$fail_log" | head -20 || true
+            fi
           fi
 
       - name: Upload the RELEASE-LTO reference
@@ -989,7 +996,8 @@ jobs:
           name: kernel-release-reference
           path: |
             UniXNU/out/myron/**/tree/build/xnu/fileset-reference/**/mach.release.bcm2837.unstripped.noctf
-            UniXNU/release.log
+            UniXNU/out/myron/**/tree/build/xnu/fileset-reference/**/*.log
+            UniXNU/out/myron/**/tree/build/xnu/fileset-reference/**/*.json
           if-no-files-found: warn
       - name: Report the kernel
         if: always()
