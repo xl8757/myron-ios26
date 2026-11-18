@@ -965,9 +965,17 @@ jobs:
           # scripts/build-xnu-4k-baseline.sh passes on Linux, and fails loudly if
           # upstream moves the anchor.
           python3 ../myron-ios26/scripts/patch-release-reference-linux.py --mu-root .
+          # setup-toolchain.py installs into <prefix>/CommandLineTools/usr, not
+          # <prefix> directly: line 371 of that script is
+          #   clt = prefix / 'CommandLineTools/usr'
+          # and xnu-host-cc and migcom go under clt/bin and clt/libexec. Getting this
+          # wrong makes make fail on a missing host compiler before any real work.
+          CLT="$HOME/unixnu-linux/CommandLineTools/usr"
           export PLATFORM=iPhoneOS
-          export HOST_CC="$HOME/unixnu-linux/bin/xnu-host-cc"
-          export MIGCOM="$HOME/unixnu-linux/libexec/migcom"
+          export HOST_CC="$CLT/bin/xnu-host-cc"
+          export MIGCOM="$CLT/libexec/migcom"
+          test -x "$HOST_CC" || { echo "::error::host compiler missing at $HOST_CC"; ls -la "$HOME/unixnu-linux" || true; exit 1; }
+          test -x "$MIGCOM" || { echo "::error::migcom missing at $MIGCOM"; exit 1; }
 
           UNIXNU_TOOLCHAIN="$HOME/unixnu-linux" \
           PATH="$HOME/unixnu-linux/bin:$PATH" \
