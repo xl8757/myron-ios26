@@ -49,16 +49,17 @@ CONFIG_XNU_CRYPTO_BOOTSTRAP="source"
 # DT handoff and diagnostics.
 CONFIG_XNU_DT_PANIC_REGION=y
 
-# Early screen diagnostics: paint stage markers into the framebuffer from the first C
-# that runs, before the kernel owns a console. Pairs with myron-early-console.patch in
-# patches/xnu26/series.
+# Early boot progress on the screen. The board has no serial port, and every kernel
+# boot so far has ended with the loader's own text still showing and nothing after
+# it - which reads the same whether XNU never started, died before its console, or
+# died in arm_vm_init.
 #
-# It goes through XNU_EXTRA_CFLAGS rather than its own switch because there is no
-# generic CONFIG_XNU_* -> -D path: kernel.py turns CONFIG_XNU_<NAME> into the
-# environment variable XNU_<NAME>, and build-xnu-4k-baseline.sh seeds its CFLAGS_EXTRA
-# from XNU_EXTRA_CFLAGS. Every other switch in that script is wired by name, so a new
-# one would have to be added there (UniXNU's repository, not this one).
-CONFIG_XNU_EXTRA_CFLAGS="-DXNU_MYRON_EARLY=1"
+# zzz-boot-progress.patch already supplies the machinery: boot_progress_stage() in
+# osfmk/kern/boot_progress.h, markers around arm_init and arm_vm_init, and hooks in
+# _cnputc and vcputc_options that route console output to it. This switch is the one
+# build-xnu-4k-baseline.sh wires itself (XNU_BOOT_PROGRESS, line 86), so no device
+# patch is needed and none is added.
+CONFIG_XNU_BOOT_PROGRESS=y
 # Supplies the cs_native4k_* counters the vendored BootLog.c references; see the
 # note above.
 CONFIG_XNU_NATIVE_CS_HASH_CACHE=y
