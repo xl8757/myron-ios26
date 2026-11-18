@@ -558,8 +558,14 @@ def main() -> int:
     ap.add_argument("--arch", default="arm64e")
     args = ap.parse_args()
 
+    # build-xnu-4k-baseline.sh runs this with the assembled tree as its working
+    # directory, and .cache/xnu-work is created at line 34 of that script - well before
+    # line 98 calls us - so the current directory is the tree unless told otherwise.
     if args.tree is not None:
         tree = args.tree.resolve()
+    elif (Path.cwd() / ".cache" / "xnu-work" / "osfmk").is_dir():
+        tree = Path.cwd().resolve()
+        print(f"boot-progress: tree {tree} (working directory)")
     else:
         root = (args.unixnu or Path("UniXNU")).resolve()
         base = root / "out" / args.board
@@ -571,18 +577,27 @@ def main() -> int:
         tree = candidates[0].resolve()
         print(f"boot-progress: tree {tree}")
 
+    # The XNU working copy is tree/.cache/xnu-work, not tree/osfmk: unixnu tree links the
+    # modules (drivers/ kits/ patches/ refer/) and build-xnu-4k-baseline.sh clones the
+    # kernel into .cache/xnu-work and applies every patch there. Writing into
+    # tree/osfmk would land outside the tree that gets compiled.
+    xnu = tree / ".cache" / "xnu-work"
+    if not (xnu / "osfmk").is_dir():
+        print(f"boot-progress: no XNU working copy at {xnu}", file=sys.stderr)
+        return 1
+
     out = tree / "build" / "boot-progress"
     out.mkdir(parents=True, exist_ok=True)
 
-    # The translation unit goes into the tree so the kernel build compiles it too.
-    target = tree / "osfmk" / "kern" / "boot_progress.c"
+    # The translation unit goes into the kernel tree so the build compiles it too.
+    target = xnu / "osfmk" / "kern" / "boot_progress.c"
     target.write_text(IMPLEMENTATION, encoding="utf-8")
     print(f"boot_progress.c: {target} ({len(IMPLEMENTATION)} bytes)")
 
     # Declaring the header is not enough to build it: XNU lists translation units in
     # osfmk/conf/files, and zzz-boot-progress.patch only added boot_progress.h to
     # osfmk/kern/Makefile's export list. Register the source the same way startup.c is.
-    files = tree / "osfmk" / "conf" / "files"
+    files = xnu / "osfmk" / "conf" / "files"
     if not files.is_file():
         print(f"boot-progress: {files} missing, cannot register the source", file=sys.stderr)
         return 1
@@ -609,8 +624,8 @@ def main() -> int:
     # translation unit through osfmk/kern/Makefile.
     common = [args.cc, "-c", "-O2", "-target", f"{args.arch}-apple-ios",
               "-ffreestanding", "-fno-builtin", "-mgeneral-regs-only", "-mstrict-align",
-              "-I", str(tree), "-I", str(tree / "osfmk"),
-              "-I", str(tree / "bsd"), "-I", str(tree / "pexpert")]
+              "-I", str(xnu), "-I", str(xnu / "osfmk"),
+              "-I", str(xnu / "bsd"), "-I", str(xnu / "pexpert")]
     if args.sdks:
         common += ["-isysroot", args.sdks]
 
