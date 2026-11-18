@@ -1,5 +1,84 @@
 # Bring-up log
 
+## 2026-11-18: the RELEASE comparison kernel builds
+
+`scripts/build-fileset-release-reference.py` now runs to completion on the Linux
+runner and produces `mach.release.bcm2837.unstripped.noctf`. This is the
+configuration the prelink pairing needs: `KERNEL_CONFIGS=RELEASE` instead of the
+`DEVELOPMENT` that `build-xnu-4k-baseline.sh` hard codes.
+
+Measured locally from the artifact:
+
+    size        16,572,552 bytes (15.8 MiB)
+    magic       0xfeedfacf  MH_MAGIC_64
+    cputype     0x0100000c  CPU_TYPE_ARM64
+    filetype    2           MH_EXECUTE      <- what DarwinBoot's parser accepts
+    ncmds       25
+    symbols     172,141 total, 97,394 defined, 6,676 undefined
+
+For comparison the DEVELOPMENT kernel is 24,392,328 bytes (23.3 MiB), so RELEASE
+is 35% smaller, which is what turning off the debug and assert paths should do.
+Both are well under the 56 MiB `XNU_Payload` window, so the size problem that
+blocked a boot test is gone for either configuration.
+
+### What it took, in order
+
+Every one of these was a separate run, and each was a real defect rather than a
+guess:
+
+1. **No Linux branch in the reference script.** It copies the tree and runs make
+   with a hard coded argument list, so make ran `sysctl hw.physicalcpu`,
+   `sw_vers` and `hw.memsize`, got nothing, and died in `MakeInc.cmd:575`
+   (`invalid second argument to 'wordlist'`). MakeInc assigns `MEMORY_SIZE` and
+   `SYSCTL_HW_*` with `:=`, which overrides the environment, so the values have to
+   be make arguments. `scripts/patch-release-reference-linux.py` inserts the same
+   assignments `build-xnu-4k-baseline.sh` passes.
+2. **Toolchain paths.** `xnu-host-cc` is at `<prefix>/CommandLineTools/usr/bin`,
+   not `<prefix>/bin` (setup-toolchain.py line 371).
+3. **`flex: fatal internal error, exec of failed`.** The shims live in
+   `CommandLineTools/usr/bin`; with only `<prefix>/bin` on PATH flex could not
+   find `gm4`.
+4. **`clang: line 32: /opt/unixnu-linux/llvm/bin/clang: No such file`.** The clang
+   wrapper execs `${CROSS_CLANG:-/opt/unixnu-linux/llvm/bin/clang}` and the
+   default does not exist here. The reference script bypasses the `unixnu` driver,
+   so it never got the twelve variables `scripts/unixnu/kernel.py` lines 102-109
+   set for the normal kernel step. They are copied into the step.
+5. **`Undefined symbols ... _arm64_platform_sleep_hook`** (this one broke the
+   *main* kernel build, not the reference build). `ArmCpu.cpp` declares the hook
+   `weak_import`, but an authenticated pointer to an undefined weak symbol does
+   not link on arm64e. The definition is in `sheng-platform-sleep.patch`, which
+   UniXNU-sheng carries as its last device-series entry. Only the `osfmk/arm64/cpu.c`
+   hunks are used: the full patch also touches `cpu_common.c` and
+   `IOPMrootDomain.cpp`, and its `cpu_common.c` hunk no longer applies because the
+   arm64e series already rewrote `sheng_sigp_recover`.
+6. **LTO cannot work here.** `setup-toolchain.py` builds cctools-port with
+   `--disable-lto-support` ("the kernel link uses no LTO"), so our ld64 has no
+   LLVM LTO backend. `BUILD_LTO=1` makes clang emit bitcode and ld ignored all 956
+   objects as `unknown-unsupported file format`, then failed. Dropping `--lto`
+   keeps `KERNEL_CONFIGS=RELEASE`, which is the part that matters for pairing, and
+   links ordinary Mach-O objects.
+7. **`Undefined symbols ... __llvm_profile_*`.** `OSKext.cpp` declares
+   `__llvm_profile_get_size_for_buffer_internal` and
+   `__llvm_profile_write_buffer_internal` and expects compiler-rt to define them.
+   `prepare-xnu.py libs` builds those into `libcc_kext.a`, but it cannot run on
+   this runner: it needs the SDK headers `installhdrs` writes into the fakeroot
+   and the reference build does its own copytree without `installhdrs`, so it
+   fails with `sys/_types.h file not found`. The reference script already stubs
+   undefined `native_*` hooks for exactly the same reason (this comparison kernel
+   never runs), so its stub pattern was widened to cover `__llvm_profile_*`.
+
+### The measurement bug worth remembering
+
+The first attempt at counting functions printed `0 text symbols` for both
+kernels. The cause was `nm -arch arm64e`: `-arch` is cctools' flag, and the `nm`
+on PATH is GNU nm, which rejects it and prints nothing. Parsing the Mach-O
+`LC_SYMTAB` directly is the reliable way to count here.
+
+PENDING: the pairing ratio itself. The RELEASE kernel exists, but prelink has not
+been run against it, so the 32% figure from the DEVELOPMENT image still stands.
+Measuring it needs the 23F84 kernelcache, which CI cannot hold.
+
+
 ## 2026-11-18: adding drivers back has to follow the dependency chain
 
 Baseline is 52 modules (`vendor=none`). Adding drivers back one group at a time
