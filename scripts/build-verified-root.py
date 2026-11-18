@@ -32,6 +32,8 @@ member in to satisfy the driver's unresolved references.
 """
 from __future__ import annotations
 
+import os
+
 import argparse
 import json
 import subprocess
@@ -44,12 +46,18 @@ ARCHIVE = OUT / 'libVerifiedRoot.a'
 RECIPE = ROOT / 'build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/osfmk/DEVELOPMENT/prng_random.o.json'
 
 def boot_progress_mode(root: Path) -> int:
-    """Whether the kernel is being built with XNU_BOOT_PROGRESS, from the defconfig.
+    """Whether the kernel is being built with XNU_BOOT_PROGRESS.
 
     The stub below must not define boot_progress_poll when the tree does, or the link
-    fails on a duplicate symbol. Reading the assembled .config rather than guessing
-    keeps the stub and the kernel on the same value.
+    fails on a duplicate symbol. The value reaches every step as the XNU_BOOT_PROGRESS
+    environment variable - kernel.py turns CONFIG_XNU_<NAME> into XNU_<NAME>, and
+    build-xnu-4k-baseline.sh reads it from there - so read the environment rather than
+    looking for it in a file it never reaches. The .config fallback covers a local run
+    where the variable is not exported.
     """
+    value = os.environ.get('XNU_BOOT_PROGRESS')
+    if value is not None:
+        return 1 if value.strip() in ('1', 'y', 'Y', 'true') else 0
     for candidate in (root / '.config', root / 'build/xnu/.config'):
         if candidate.is_file():
             for line in candidate.read_text(encoding='utf-8', errors='replace').splitlines():
