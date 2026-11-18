@@ -1000,8 +1000,15 @@ jobs:
             test -x "$f" || { echo "::error::missing toolchain file: $f"; exit 1; }
           done
 
+          # No --lto: setup-toolchain.py builds cctools-port with
+          # --disable-lto-support ("the kernel link uses no LTO"), so our ld64 has no
+          # LLVM LTO backend. With BUILD_LTO=1 clang emits bitcode and ld ignores all
+          # 956 objects as "unknown-unsupported file format", then fails. Without it the
+          # build is KERNEL_CONFIGS=RELEASE with ordinary Mach-O objects, which is the
+          # part that matters here: RELEASE is what brings the function set in line with
+          # Apple's kernelcache. The output name is the same either way.
           UNIXNU_TOOLCHAIN="$HOME/unixnu-linux" \
-            python3 scripts/build-fileset-release-reference.py --tree "$tree" --lto 2>&1 | tee release.log
+            python3 scripts/build-fileset-release-reference.py --tree "$tree" 2>&1 | tee release.log
           status=${PIPESTATUS[0]}
 
           built=$(find "$tree/build/xnu/fileset-reference" -name 'mach.release.bcm2837.unstripped.noctf' -type f 2>/dev/null | head -1)
