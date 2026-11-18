@@ -67,6 +67,19 @@ INSERT = """    # Linux hosts have no sysctl/sw_vers, and MakeInc.cmd assigns ME
             f'SYSCTL_HW_PHYSICALCPU={_cpus}',
             f'SYSCTL_HW_LOGICALCPU={_cpus}',
         ]
+    # XNU normally supplies -Wl,-add_split_seg_info through
+    # LDFLAGS_KERNEL_ONLY_SUBARCH_arm64e. The DEVELOPMENT image carries
+    # LC_SEGMENT_SPLIT_INFO and the RELEASE one does not, although both carry
+    # __LINKINFO, which the same make variable creates - so the RELEASE link loses
+    # the option somewhere. host_args is spliced straight into the linker command,
+    # so the option goes there where no make variable can drop it, and
+    # fileset_layout.split_references gets the section it reads.
+    # A command-line assignment outranks the makefile's own definition of this
+    # variable (make gives command-line variables the highest precedence), so it
+    # restores the option without touching makedefs. -Wl,-kernel has to come along
+    # because overriding the variable replaces its whole value.
+    host_args.append(
+        'LDFLAGS_KERNEL_ONLY_SUBARCH_arm64e=-Wl,-add_split_seg_info -Wl,-kernel')
     args = ['make','-C',str(source),'build','SDKROOT=iphoneos', *host_args,
 """
 
