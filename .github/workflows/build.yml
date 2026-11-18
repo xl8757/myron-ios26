@@ -956,6 +956,19 @@ jobs:
           tree=out/myron/ios-26.5.2-23F84/myron_ios26/tree
           test -d "$tree" || { echo "::error::no prepared tree at $tree"; exit 1; }
 
+          # build-fileset-release-reference.py has no Linux branch. It copies
+          # .cache/xnu-work with copytree and hard codes the make arguments, so make
+          # asks a Mac for the host CPU count and memory (sysctl hw.physicalcpu,
+          # sw_vers, hw.memsize) and stops on "invalid second argument to 'wordlist'"
+          # before it compiles anything. Exporting MEMORY_SIZE and SYSCTL_HW_* for the
+          # process does reach make, and prepare-xnu.py cannot help because it rewrites
+          # ROOT/.cache/xnu-work while this script builds its own copy. The environment
+          # below is therefore the only lever available from here; see the artifact log
+          # when it still fails.
+          export MEMORY_SIZE="$(( $(getconf _PHYS_PAGES) * $(getconf PAGE_SIZE) ))"
+          export SYSCTL_HW_PHYSICALCPU="$(nproc)"
+          export SYSCTL_HW_LOGICALCPU="$(nproc)"
+
           UNIXNU_TOOLCHAIN="$HOME/unixnu-linux" \
           PATH="$HOME/unixnu-linux/bin:$PATH" \
             python3 scripts/build-fileset-release-reference.py --tree "$tree" --lto 2>&1 | tee release.log
