@@ -1,5 +1,106 @@
 # Bring-up log
 
+## 2026-11-18 (later): the kernel finally loads, and the payload problem is solved
+
+This is the turn where the payload question stopped being the blocker. Everything
+before it was trying to get a kernel image into the phone's memory; that now works
+and is measured on hardware.
+
+### What was built: a bare-metal loader instead of the UEFI firmware
+
+The UEFI route needs a payload it can read from either the boot image ramdisk or the
+firmware volume, and neither works here (previous entries). The route taken instead is
+the one `ShueiTsuki/data-a-live` proved on the same SoC: a small freestanding loader is
+packed as an arm64 Image, the XNU payload rides inside it as a `.incbin` section, and
+ABL jumps straight into it. No UEFI, no ramdisk, no firmware volume, no dependency on
+what the bootloader does or does not report.
+
+The loader acts as iBoot. It copies the kernel segments to `phys_base`, lays the ADT
+and the `boot_args` behind them, and enters XNU with the MMU off. Sources are in
+`tools/loader/` and `tools/payload/` in `myron-uefi`, and the workflow is
+`.github/workflows/build-loader.yml`.
+
+### Measured on hardware: every address the loader computed was right
+
+The loader paints its progress on the framebuffer, which is the only channel this
+board has before the kernel takes over. Two boots, both reaching the jump:
+
+    PANDORA  loader v2 - nothing is written to storage
+    LEVEL    EL1
+    LOADED   0x00000000C7800000
+    PAYLOAD  0x00000000C780B000
+    PHYS     0x0000000089000000
+    MEMSIZE  0x000000036FF00000
+    ENTRY    0xFFFFFFF00734D488
+    KERN_END 0x0000000892150000
+    BOOTARGS 0x0000000892154000
+    JUMP     0x000000089134D488
+    XNU      jumping (the kernel console takes over)
+
+Each of those was checked against an independent offline computation from the
+payload header and the image layout, and all four that involve arithmetic agree:
+`KERN_END`, `JUMP`, `BOOTARGS` and the `LOADED` base (`0xC7800000`, which puts the
+payload at `0xC780B000` because that is its offset in the image). The loader is not
+where this fails.
+
+### Two real bugs found along the way, both mine
+
+**The kernel RAM base sat on a protected range.** `phys_base` was the high bank base
+`0x880000000`. `LCP_DARE_REGION` occupies `0x880000000 + 96 MiB` there, and XNU maps
+every byte from `phys_base` upward as cacheable memory, so a Qualcomm protected range
+was inside the kernel's own range. ios-sweet records the rule as "every protected range
+must sit below the kernel". Fixed by starting at `0x890000000`, 160 MiB above the end
+of that region, leaving 13.75 GiB. The second boot shows the new value.
+
+**The chained fixups were being rewritten before XNU could do it.** `mkpayload.py`
+came from ios-sweet, which targets xnu-8796: it walks `LC_DYLD_CHAINED_FIXUPS` and
+rewrites every pointer to a plain VA. XNU 12377 does that itself - UniXNU's
+`DarwinBoot.c` says it outright, "XNU rebases and signs its own fixup chains after
+entry; firmware only copies root mappings", and its loader copies segment bytes
+untouched. 44,237 pointers had been rewritten by the time the kernel saw them. The
+option `--no-fixups` keeps the chains intact; the payload's `__TEXT` now matches the
+source kernel byte for byte over the first 4 KiB.
+
+**A third bug was in the pipeline, not the code:** every file was saved with CRLF, so
+on the runner the shebang arrived as `#!/bin/bash\r` and the build died with exit code
+127 before compiling anything. All loader sources are LF now.
+
+### Where it stops, and the answer that was found for it
+
+The kernel is entered and produces nothing. It does not reset either - the phone has to
+be power-cycled by hand, which matches ios-sweet's note that a hung Apple kernel simply
+stops. So the loader hands over and XNU dies before it can say anything.
+
+The cause is the ADT. This build used ios-sweet's `mkadt.py`, which is a hand-written
+tree for xnu-8796. UniXNU generates its ADT differently, from a compiled hardware DTB
+plus the OS profile (`scripts/make-adt.py`, `scripts/unixnu/devicetree.py`), and the
+differences are not cosmetic. The one that settles it is in `devicetree.py`:
+
+    # xnu-12377 takes 4 x 64 seed bytes on ARM and panics with fewer;
+    # older kernels read the first 64.
+    chosen = [('random-seed', os.urandom(256)), ...]
+
+The ADT this build generated carries a 64-byte `random-seed` - visible in the payload
+as the length field `0x40` - so XNU 12377 panics on it immediately, before any console
+exists. The same generator also supplies `empty_nvram_proxy` (the 8 KiB CHRP bank
+IODTNVRAM consumes), `/chosen/memory-map`, `/chosen/manifest-properties`, and it
+requires `/cpus`, `/psci` and `/memory` to come from the hardware tree.
+
+So the next step is to generate the ADT with UniXNU's generator. That needs a compiled
+`myron.dtb`; `dts/myron.dts` is in the repository but no `dtc` is installed here, and
+the CI step that would build it has not been written yet.
+
+### What is proven, and what is not
+
+Proven on hardware: ABL loads the image, the loader parses its payload, copies all ten
+segments to the high bank, lays down the ADT and `boot_args`, and jumps to the XNU
+entry with the expected physical addresses. The payload delivery problem that blocked
+every earlier attempt is closed.
+
+Not proven: that XNU gets far enough to print anything. It does not, and the ADT is the
+reason with the strongest evidence behind it.
+
+
 ## 2026-11-18: the payload cannot ride in the firmware volume either
 
 The fixed-address route is exhausted and so is the embedded route. Both failures
