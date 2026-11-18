@@ -929,6 +929,68 @@ jobs:
             exit 1
           fi
 
+      # Build the RELEASE-LTO comparison kernel.
+      #
+      # The prelink step pairs the native kernel's functions against Apple's
+      # RELEASE-LTO 23F84 kernelcache. Our normal build is DEVELOPMENT + LTO off
+      # (build-xnu-4k-baseline.sh hard codes both), which produces 29411
+      # functions with 841 diversities against Apple's 21113 with 2885. Only
+      # 32% of the functions find a reliable anchor, and board.toml records what
+      # that means: an image that stops at the first rebound kext.
+      #
+      # scripts/build-fileset-release-reference.py from UniXNU builds the same
+      # tree as RELEASE with LTO on, in its own output directory, so the two
+      # configurations cannot contaminate each other. It is the comparison
+      # kernel the prelink step was meant to read: it never runs, so the script
+      # stubs the native hooks and drops the forced exports the link cannot
+      # satisfy, then links again.
+      #
+      # This is a size and pairing measurement first. Whether the prelink step
+      # then produces a bootable image is the next question, and it needs the
+      # 23F84 kernelcache.
+      - name: Build the RELEASE-LTO reference kernel
+        working-directory: UniXNU
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          tree=out/myron/ios-26.5.2-23F84/myron_ios26/tree
+          test -d "$tree" || { echo "::error::no prepared tree at $tree"; exit 1; }
+
+          UNIXNU_TOOLCHAIN="$HOME/unixnu-linux" \
+          PATH="$HOME/unixnu-linux/bin:$PATH" \
+            python3 scripts/build-fileset-release-reference.py --tree "$tree" --lto 2>&1 | tee release.log
+          status=${PIPESTATUS[0]}
+
+          built=$(find "$tree/build/xnu/fileset-reference" -name 'mach.release.bcm2837.unstripped.noctf' -type f 2>/dev/null | head -1)
+          if [ -n "$built" ]; then
+            echo "RELEASE-LTO kernel: $built ($(wc -c < "$built") bytes)"
+            sha256sum "$built"
+          fi
+
+          # Compare the function counts the two configurations produce. This is
+          # the number that decides whether pairing improves.
+          dev=$(find out -name 'mach.development.bcm2837.unstripped.noctf' -type f 2>/dev/null | head -1)
+          if [ -n "$built" ] && [ -n "$dev" ]; then
+            for f in "$dev" "$built"; do
+              n=$(nm -arch arm64e --defined-only "$f" 2>/dev/null | grep -c ' [Tt] ' || true)
+              echo "$(basename "$f"): $n text symbols ($(wc -c < "$f") bytes)"
+            done
+          fi
+
+          if [ "$status" -ne 0 ]; then
+            echo "::warning::RELEASE-LTO reference build failed; see release.log (this is a measurement step, not a gate)"
+          fi
+
+      - name: Upload the RELEASE-LTO reference
+        if: always()
+        uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with:
+          name: kernel-release-reference
+          path: |
+            UniXNU/out/myron/**/tree/build/xnu/fileset-reference/**/mach.release.bcm2837.unstripped.noctf
+            UniXNU/release.log
+          if-no-files-found: warn
       - name: Report the kernel
         if: always()
         run: |
