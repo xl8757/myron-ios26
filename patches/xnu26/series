@@ -29,3 +29,19 @@
 # line 134, which the arm64e BCM2837 block moves, and its MAX_CPUS 8 /
 # MAX_CPU_CLUSTERS 1 is older and less correct than that block's 8 / 2.
 sheng-platform-power.patch
+
+# sheng-platform-sleep.patch defines arm64_platform_sleep_hook in
+# osfmk/arm64/cpu.c and calls it from ml_arm_sleep. ArmCpu.cpp declares it
+# weak_import, which would normally allow the symbol to be absent, but on
+# arm64e the authenticated pointer of an undefined weak symbol fails the link:
+#   ld: symbol(s) not found for architecture arm64e
+#     "_arm64_platform_sleep_hook", referenced from libArmCpu.a(ArmCpu.o)
+# The component is in [kernel] archives, so the definition has to exist even
+# though the hook stays NULL and nothing about sleep changes unless the kernel
+# is booted with platform-sleep=1. Every call site in the patch tests for NULL,
+# so a board that never sets that boot argument behaves as it did before.
+#
+# Taken from UniXNU-sheng's device series, where it is the last entry. The
+# iokit hunk was written against a tree at 2026-11-16 and applies on top of the
+# arm64e series this board already resolves.
+sheng-platform-sleep.patch
