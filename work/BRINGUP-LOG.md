@@ -1,5 +1,248 @@
 # Bring-up log
 
+## 2026-11-18 (evening): the ADT is finally right, the kernel is still silent, and it has a diagnostic this board cannot reach
+
+The previous entry ended with "the ADT is the reason with the strongest evidence behind
+it". Acting on that closes the ADT question completely: the kernel now gets the tree
+xnu-12377 asks for, verified property by property in the payload. It does not close the
+boot. This entry records both halves, because the second is what the next session picks
+up.
+
+### Generating the ADT with UniXNU's generator found four structural mismatches
+
+The generator is `tools/unixnu/devicetree.py`, driven by `tools/payload/make-adt-myron.py`
+in `myron-uefi`. Pointing it at this board failed four times in a row, each time on a
+different assumption:
+
+1. **`KeyError: 'chip_id'`.** `build.sh` passed `BOARD=Resources/Configs/myron.toml`, which
+   is the UEFI configuration: it has no `[payload]` section at all. The generator's inputs
+   live in `board.toml`. One-word fix, but it is the kind of thing that reads as a
+   generator bug until the file is opened.
+
+2. **`cpu-map: CPU affinity must fit a u32`.** The `/cpus` loop iterated every child and
+   assumed each was a CPU. An Android vendor DTB also keeps `cpu-map` (the cluster
+   topology) and `idle-states` under `/cpus`, and neither has a `reg`. The Devicetree
+   Specification marks real CPUs with `device_type = "cpu"`, so the loop now filters on
+   exactly that. **This is the one deliberate deviation from upstream in that file**, and
+   the comment says why: upstream is only ever fed a small hand-written board DTS, never
+   a full vendor tree.
+
+3. **`Multiple CPUs require a PSCI method`.** With eight CPUs recognised, the generator
+   looked for `/psci` among the root's children. The vendor tree keeps it at `/soc/psci`.
+
+4. **`random-seed: 0 bytes TOO SHORT`.** A false alarm caused by my own verification code.
+   The ADT property is serialised as `name[32] + size(4) + value`, with the flags in the
+   top bit of `size`; the check scanned for the name and then guessed where the length
+   word was, reading the wrong one. `adt.parse()` reads the tree correctly, so the check
+   now goes through it. The property had been 256 bytes all along.
+
+A fifth mismatch was not an error but a design decision: `cpus.scalar('timebase-frequency')`
+reads `/cpus`, not `/cpu@0`. The vendor tree already carried it in the right place
+(`dts/myron.dts` line 127) with a comment recording why.
+
+### The vendor DTB is the wrong input, so the board tree was rewritten
+
+Fixing those one at a time would have worked, but it would have left a 24,993-line
+decompiled vendor tree as the input to a generator that expects the shape UniXNU's own
+boards use. `Resources/DTBs/myron-board.dts` is that shape, 166 lines, every value taken
+from this unit:
+
+    /cpus          eight cores, real affinities 0x0-0x500, 0x10000, 0x10100
+    /psci          at the root, method = "smc"
+    /memory        the high bank window (see below)
+    /reserved-memory   framebuffer@fc800000, 0x2b00000, no-map
+    /soc/gic       unixnu,adt-name = "intc", 0x17000000 + 0x17080000/0x40000
+    /soc/ufshc     unixnu,adt-name = "ufshc"
+
+It compiles to a 2,140-byte DTB. `dts/myron.dts` stays in the repository as the
+byte-exact stock reference; it is no longer an input to anything.
+
+### The memory window had to move, and this is the third time this class of bug bit
+
+`devicetree.py` takes `/chosen/dram-base` and `dram-size` straight from `/memory`, and the
+loader puts the kernel at `dram-base`. XNU then maps everything from there upward as
+cacheable memory, so one protected range inside the span kills it before it can print.
+
+The first board tree copied `board.toml`'s `dram_size = 0x80000000` and used the low bank
+at `0x80000000` as `/memory`. That regenerated `phys_base = 0x80000000` - the exact
+placement an earlier entry records as wrong, because the low bank is full of Qualcomm
+carve-outs (MPSS 235 MiB, ADSP 85 MiB, DSM 95 MiB and more). Caught before flashing,
+because the payload was inspected after the build.
+
+The high bank at `0x880000000` has exactly one protected range, `LCP_DARE_REGION`
+(`0x880000000` + 96 MiB). The window now starts 160 MiB past its end:
+
+    /memory  reg = <0x8 0x90000000 0x3 0x70000000>
+    base 0x890000000, size 0x370000000 = 13.75 GiB, ends 0xc00000000
+
+`board.toml [payload] dram_size` moved with it to `0x370000000`, since the generator
+refuses a mismatch.
+
+### Measured in the payload: everything the kernel asks for is there
+
+    phys_base        0x890000000        the high-bank window
+    mem_size         0x370000000        13.75 GiB
+    segments         10
+    payload size     17,414,320
+    fixups           0                  left for XNU, see the earlier entry
+    image            17,459,376         (16.65 MiB)
+    boot.img         17,465,344
+    boot.img sha256  757fa0e221dcc2d47c1d329171c9cf4e5064bb266747be3ab9d288a40db6240d
+
+    ADT: 13,352 bytes
+      random-seed            256 bytes     xnu-12377 needs 4 x 64 on ARM
+      dram-base              0x890000000
+      dram-size              0x370000000
+      unique-chip-id         0x1234567890abcdef
+      chip-id                0x8142
+      darwinboot-memory-size 0x200000000
+      /cpus                  8 CPUs
+      children               chosen, cpus, psci, arm-io, defaults, options, product
+
+This is the first time this board has produced an ADT that matches what the kernel it is
+booting actually requires.
+
+### On hardware: the loader is still right, the kernel still says nothing
+
+One boot with that image. The loader screen reported, and every address again agreed with
+the independent offline computation:
+
+    PHYS     0x0000000890000000
+    MEMSIZE  0x0000000370000000
+    ENTRY    0xFFFFFFF00734D488
+    KERN_END 0x0000000892150000
+    BOOTARGS 0x0000000892154000
+    JUMP     0x000000089134D488
+    XNU      jumping (the kernel console takes over)
+
+`MEMSIZE` moved from the earlier boot's `0x36FF00000` to `0x370000000`, which is the
+board tree taking effect. The kernel then produced nothing, and again did not reset - a
+hung Apple kernel, not a watchdog.
+
+Everything the ADT hypothesis predicted is now satisfied and the symptom is unchanged.
+That does not disprove the ADT; it means the next question is no longer "what does the
+kernel want" but "how far does it get", and this board has no way to answer that yet.
+
+### The kernel already has a boot progress facility
+
+`zzz-boot-progress.patch`, the last of the 72 patches in the resolved order, supplies it:
+`osfmk/kern/boot_progress.h` with `boot_progress_stage()` and friends, markers in
+`arm_init` around `arm_init`/`arm_vm_init`, and hooks in `_cnputc` and `vcputc_options`
+that route console output into it. `build-xnu-4k-baseline.sh` wires the switch by name -
+`BOOT_PROGRESS=${XNU_BOOT_PROGRESS:-0}` at line 86, `-DXNU_BOOT_PROGRESS=$BOOT_PROGRESS`
+at line 834 - so `CONFIG_XNU_BOOT_PROGRESS=y` is the whole interface.
+
+This was found the hard way. A device patch (`myron-early-console.patch`) had already been
+written to paint markers into the framebuffer from `start.s` and `arm_init`, adapted from
+ios-sweet's `sweet_early.c`. It was deleted once the upstream mechanism turned up: it
+duplicated machinery that exists, and it did not apply cleanly on top of the 72-patch tree
+(the ones that touch `arm_init.c`, `start.s` and `conf/files.arm64` shift every anchor).
+That detour cost two builds and is recorded because "read the sibling before inventing"
+is a standing rule for this repository, and this is what breaking it looks like.
+
+### Supplying the missing half of it
+
+Enabling the switch stops the build at line 98:
+
+    Boot progress requires the audited UFS/owner-root and source-corecrypto build
+
+That is a real precondition (lines 93-97): `XNU_NATIVE_UFS`, `XNU_OWNER_ROOT_AUDIT` and
+`XNU_SOURCE_CORECRYPTO14` must all be 1. UFS was already on; the other two were added. The
+audit is allowed because `XNU_SOURCE_STORAGE=1` already supplies real owner-verified block
+crypto, which is what line 298 checks.
+
+Past that check, line 98 runs `scripts/build-boot-progress.py`, and **that file does not
+exist** - not in the patch, not anywhere in UniXNU (404 on the contents API). The patch
+carries the header and the call sites; `osfmk/conf/files` has no entry to compile an
+implementation, and `scripts/check-boot-progress-code.py` meanwhile inspects
+`build/boot-progress/BootProgress.o`, an object nothing produced.
+
+`myron-ios26/scripts/build-boot-progress.py` therefore writes both halves:
+
+  * `osfmk/kern/boot_progress.c`, implementing every function the header declares:
+    characters and stage lines painted into the framebuffer the loader handed over in
+    `boot_args.Video`, plus an 8 KiB ring that outlives the console for the panic log.
+    No allocation, no locks, no per-CPU state - `_cnputc` can reach it before any exist.
+  * the `osfmk/conf/files` entry that makes the kernel compile it.
+
+It also builds `BootProgress.o`, `BootFaultProbe.o` and `BootWatchdogPolicy.o` and archives
+them into `build/boot-progress/libBootProgress.a`, because line 106 hashes that archive into
+the stamp that decides whether the objects calling the hooks get rebuilt. Without it the
+very next step dies on `FileNotFoundError` for that path.
+
+Two placement facts cost a build each. The XNU working copy is `tree/.cache/xnu-work`, not
+`tree/osfmk` - `unixnu tree` links only modules, and `build-xnu-4k-baseline.sh` clones and
+patches the kernel under `.cache`. And the script must run from inside that build, not as an
+earlier workflow step, because `.cache/xnu-work` does not exist until line 34 and the patch
+series is not applied until line 65. The workflow step therefore installs the script into
+the tree's `scripts/`, where line 98 looks for it.
+
+### Where it stops: one symbol, two definitions
+
+The kernel now compiles `boot_progress.o` and the link fails on:
+
+    duplicate symbol '_boot_progress_poll' in:
+      .../osfmk/DEVELOPMENT/boot_progress.o
+      .../libVerifiedRoot.a(boot-progress-stub.o)
+
+`scripts/build-verified-root.py` generates that stub with a comment that states the rule
+exactly: an observer that observes nothing is "the right definition until a board
+diagnostic supplies a real one". One now does, so the stub must step aside.
+
+Two attempts to make it step aside did not work, and both are worth recording:
+
+  * Reading the assembled `.config` - `XNU_BOOT_PROGRESS` is never written there. It
+    arrives as an environment variable, because `kernel.py`'s `xnu_env()` turns
+    `CONFIG_XNU_<NAME>` into `XNU_<NAME>` and `build-xnu-4k-baseline.sh` consumes it from
+    the environment.
+  * Reading `os.environ` in `build-verified-root.py` - the build after that change still
+    failed with the same duplicate symbol, so the archive step does not see that variable
+    either. `archive-13-build-verified-root` runs before `build-xnu-4k-baseline.sh`, in a
+    different environment.
+
+The mechanism that does not depend on either is to give the stub a **weak** definition.
+`__attribute__((weak))` makes a strong definition from `boot_progress.o` win silently, and
+a weak definition still shows as a defined (non-`U`) symbol to the `nm` check at line 282,
+so the archive's own assertion keeps passing whether or not the kernel supplies a real
+implementation. `scripts/build-verified-root.py` now defines it that way, and the two
+environment-variable experiments were removed rather than left in as dead weight.
+
+That change is in the working tree and has **not been through a build**. It is the first
+thing the next session should confirm: if the link succeeds, the kernel is booted with
+`XNU_BOOT_PROGRESS` and the screen finally says how far it gets; if it fails, the log's
+next entry starts from the exact duplicate-symbol text above.
+
+A second, smaller lesson from the same afternoon: two edits to `.github/workflows/build.yml`
+carried stray indentation into an embedded Python heredoc and failed the run with
+`IndentationError: unexpected indent` before any kernel work started. The fix is
+`yaml.safe_load` plus `compile()` on every extracted heredoc before pushing, not reading
+the diff by eye.
+
+### What is proven, and what is not
+
+Proven on hardware: ABL loads the image, the loader parses its payload, copies all ten
+segments to `0x890000000`, lays down an ADT with a 256-byte `random-seed` and the
+high-bank `/memory`, and jumps to the XNU entry with every computed address matching an
+independent offline calculation.
+
+Proven by inspection: the payload and ADT contain what xnu-12377 asks for - correct seed
+length, matching `dram-base`/`dram-size`, eight CPUs, chip id, `darwinboot-memory-size`,
+intact chained fixups, ten segments.
+
+Not proven: that the kernel reaches any of its own code. It prints nothing and does not
+reset. Nothing after the jump has been observed, and the diagnostic that would show where
+it stops is one weak symbol away from linking.
+
+### The device was returned to a clean state
+
+`boot_b` had the last probe image. It was flashed back to the original `boot.img`
+(sha256 `11a20858d4e68869152baf70db0edb3d279516f9d430154cc6c96ba427940748`) and the phone
+rebooted to slot A. Only `boot_b` was ever written during this work; `boot_a`, `init_boot_a`
+(the user's Magisk root), `vbmeta`, `userdata` and the partition table were not touched,
+and no partition has been created, resized or formatted. Slot state after cleanup:
+`current-slot: a`, `slot-successful:a: yes`, `slot-successful:b: no` - which is also how it
+started.
+
 ## 2026-11-18 (later): the kernel finally loads, and the payload problem is solved
 
 This is the turn where the payload question stopped being the blocker. Everything
