@@ -1,5 +1,85 @@
 # Bring-up log
 
+## 2026-11-18: split-seg info restored, prelink emits, pairing reaches 41.2%
+
+The blocker from the previous section is fixed. `-Wl,-add_split_seg_info` now
+reaches the RELEASE link and `emit_prelink.py` writes a candidate image.
+
+### What was actually wrong
+
+Comparing the two kernels' load commands settled it:
+
+| | DEVELOPMENT | RELEASE (before) | RELEASE (now) |
+| --- | --- | --- | --- |
+| ncmds | 27 | 25 | 27 |
+| LC_SEGMENT_SPLIT_INFO | yes, 1,474,672 B | **no** | yes, 842,880 B |
+| __LINKINFO | yes | yes | yes |
+
+Both carry `__LINKINFO`, which `LDFLAGS_KERNEL_ONLY` creates from the same
+variable that holds `-Wl,-add_split_seg_info`:
+
+    LDFLAGS_KERNEL_ONLY_SUBARCH_arm64e = -Wl,-add_split_seg_info -Wl,-kernel
+
+So the option was being asked for and then lost on the RELEASE link, not
+forgotten. Rather than keep hunting through ld64 for the place it is dropped,
+`patch-release-reference-linux.py` now appends a command-line make assignment:
+
+    LDFLAGS_KERNEL_ONLY_SUBARCH_arm64e=-Wl,-add_split_seg_info -Wl,-kernel
+
+A command-line variable outranks the makefile's own definition, so this restores
+it for every link rule that expands `LDFLAGS_KERNEL_ONLY`. `-Wl,-kernel` comes
+along because overriding replaces the variable's whole value.
+
+The first attempt at this put the bare `-Wl` option into `host_args`, which is
+spliced into `make`'s argv - there it would have been read as a build goal. That
+is recorded because it is the kind of mistake this file keeps having to correct.
+
+### Results
+
+`diversities` went from **0 to 811**. That is the number that was wrong all
+along, and split-seg data is where it comes from: the split-segment relocation
+stream is what the matcher reads signatures out of.
+
+| path | before | after |
+| --- | --- | --- |
+| default | 6289 / 21113 (29.8%) | **7646 / 21113 (36.2%)** |
+| reference | 7726 / 21113 (36.6%) | **8705 / 21113 (41.2%)** |
+| kext-facing named | 972 / 3094 | **1316 / 3094** |
+
+For the record, the DEVELOPMENT image pairs 6805 (32.0%), so the RELEASE
+configuration plus a working split-seg stream is a clear improvement over where
+this started.
+
+### The image is emitted, and it says it is not loadable
+
+    kernel.macho         86,081,536 bytes (82.1 MiB)
+    candidate_sha256     bb31e063cdc7dbe0a78f8b8fbe7be5b4b5d9ea0b8a03967c90d14299a6681789
+    format               MH_FILESET
+    mapping_complete     False
+    runtime_qualified    False
+    loadable             False
+    missing_address_space  output collection
+
+    unresolved closure references: 639; stubbed functions: 2018
+
+Rebinding statistics that are all real work, not estimates: 42,024 branches,
+47,168 kext pointers, 82,701 kext chain sites kept, and the native split
+relocations consumed were 44,237 pointers plus 99,296 kind_5 and 106,457 kind_6
+records.
+
+Six hundred thirty-nine unresolved closure references across 27 kexts (apfs has
+the most), and `loadable: false` in the emitter's own manifest. So the honest
+statement is: the pipeline runs end to end and produces a candidate, and that
+candidate is not claimed to boot. `board.toml`'s warning still stands.
+
+### The size problem is back, differently
+
+The RELEASE kernel alone is 15.8 MiB and fit the 56 MiB `XNU_Payload` window.
+The prelinked fileset is 82.1 MiB, because it has to carry the rebound kexts.
+So the window question returns, one layer up: it is not the kernel that has to
+fit, it is the collection.
+
+
 ## 2026-11-18: the pairing ratio, measured against the real kernelcache
 
 First real pairing numbers. Everything before this section reported 32% from the
