@@ -1035,6 +1035,17 @@ jobs:
             sha256sum "$built"
           fi
 
+          # The prelink emitter reads LC_SEGMENT_SPLIT_INFO and the RELEASE kernel has
+          # no such command, so emit_images stops. XNU puts -Wl,-add_split_seg_info in
+          # LDFLAGS_KERNEL_ONLY_SUBARCH_arm64e and that same variable creates
+          # __LINKINFO, which the RELEASE kernel does have - so the flag reaches the
+          # link but does not take effect. Comparing the DEVELOPMENT image against the
+          # RELEASE one is what will say why, so dump both.
+          dev=$(find out -name 'mach.development.bcm2837.unstripped.noctf' -type f 2>/dev/null | head -1)
+          echo "--- load command comparison ---"
+          python3 ../myron-ios26/scripts/dump-load-commands.py \
+            ${dev:+"$dev"} ${built:+"$built"} || true
+
           # Compare what the two configurations produce. The number that matters is the
           # defined text symbols: prelink pairs function bodies, so this is the
           # denominator against Apple's 21113.
@@ -1072,6 +1083,7 @@ jobs:
             UniXNU/out/myron/**/tree/build/xnu/fileset-reference/**/mach.release.bcm2837.unstripped.noctf
             UniXNU/out/myron/**/tree/build/xnu/fileset-reference/**/*.log
             UniXNU/out/myron/**/tree/build/xnu/fileset-reference/**/*.json
+            UniXNU/out/myron/**/tree/build/xnu/ios-obj/**/mach.development.bcm2837.unstripped.noctf
           if-no-files-found: warn
       - name: Report the kernel
         if: always()
