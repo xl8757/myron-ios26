@@ -975,6 +975,11 @@ jobs:
           TOOLCHAIN="$HOME/unixnu-linux"
           CLT="$TOOLCHAIN/CommandLineTools/usr"
           XCTOOLCHAIN="$TOOLCHAIN/XcodeDefault.xctoolchain/usr"
+          # prepare-xnu.py hard codes ROOT = <UniXNU>/.cache, not the build tree, so the
+          # fakeroot the driver resolves and the one prepare-xnu.py writes are different
+          # directories. Use prepare-xnu.py's own location for anything it produces, and
+          # keep the tree's fakeroot for the SDK path the reference build reads.
+          PREP_FAKEROOT="$(pwd)/.cache/fakeroot"
           FAKEROOT="$tree/.cache/fakeroot"
 
           export LC_ALL=C
@@ -1000,18 +1005,18 @@ jobs:
             test -x "$f" || { echo "::error::missing toolchain file: $f"; exit 1; }
           done
 
-          # The RELEASE link references the LLVM profile runtime: OSKext.cpp declares
-          # __llvm_profile_get_size_for_buffer_internal and
-          # __llvm_profile_write_buffer_internal and relies on compiler-rt for the
-          # definitions, so a RELEASE build without that runtime stops with
-          # "Undefined symbols ... __llvm_profile_*". scripts/linux/prepare-xnu.py libs
-          # builds exactly those objects into .cache/fakeroot/usr/local/lib/kernel/
-          # libcc_kext.a. build-xnu-4k-baseline.sh runs it at line 159 on Linux; the
-          # reference script does not, so run it here.
-          python3 scripts/linux/prepare-xnu.py libs
-          CC_KEXT="$FAKEROOT/usr/local/lib/kernel/libcc_kext.a"
-          test -f "$CC_KEXT" || { echo "::error::libcc_kext.a missing at $CC_KEXT"; exit 1; }
-          echo "libcc_kext.a: $(stat -c %s "$CC_KEXT") bytes"
+          # The RELEASE link stops on two symbols OSKext.cpp declares and expects
+          # compiler-rt to provide:
+          #   __llvm_profile_get_size_for_buffer_internal
+          #   __llvm_profile_write_buffer_internal
+          # libcc_kext.a is where a Mac gets them, but on this runner
+          # prepare-xnu.py libs cannot build it: it needs the SDK headers that
+          # installhdrs writes into the fakeroot, and this reference build does its own
+          # copytree without running installhdrs (it fails with
+          # 'sys/_types.h file not found'). For a comparison kernel that never runs,
+          # stubbing them is the right answer, and the reference script already stubs
+          # undefined native hooks for the same reason. The helper below widens its stub
+          # pattern to cover __llvm_profile_*, so no libcc_kext.a is needed here.
 
           # No --lto: setup-toolchain.py builds cctools-port with
           # --disable-lto-support ("the kernel link uses no LTO"), so our ld64 has no
