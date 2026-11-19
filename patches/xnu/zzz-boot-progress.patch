@@ -170,16 +170,6 @@ index d1324571..72d35614 100644
  /*
   * Copyright (c) 2007-2024 Apple Inc. All rights reserved.
   *
-@@ -357,5 +358,9 @@ arm_init(
- 	unsigned int dt_entry_size = 0;
- 
-+	/* PSCI reset at arm_init entry: confirms ret from start_first_cpu worked. */
-+	__asm__ volatile("mov x0, #9\n\t"
-+	                 "movk x0, #0x8400, lsl #16\n\t"
-+	                 "smc #0" ::: "x0", "memory");
- 	arm_slide_rebase_and_sign_image();
- 
- 	arm_static_if_init(args);
 @@ -376,6 +377,11 @@ arm_init(
  #endif /* defined(HAS_APPLE_PAC) */
  
@@ -443,14 +433,3 @@ index d66c616..ebb13d0 100644
  	b Lbootstrap_tables_ready
  Lbootstrap_tables_exhausted:
  	// MMU is still off. Stop with the offending cursor/end preserved for
-@@ -829,6 +847,10 @@ Ltrampoline:
- #endif
- 
- 	// Return to arm_init()
-+	/* PSCI reset just before returning to arm_init(). */
-+	mov	x0, #9
-+	movk	x0, #0x8400, lsl #16
-+	smc	#0
- 	ret
- 
- Ltrampoline:
