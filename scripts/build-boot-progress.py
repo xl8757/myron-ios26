@@ -141,19 +141,36 @@ void
 boot_progress_init(void *arg)
 {
 	boot_args *args = arg;
-	/* Bind straight from boot_args.Video: initialize_screen() may never be
-	 * reached on the bare-metal loader route, so waiting for it to bind
-	 * would leave the diagnostic permanently unreachable. The loader filled
-	 * Video before jumping into XNU (loader.c: ba->Video.*). */
+	uintptr_t base = 0;
+	unsigned width = 0, height = 0, rowbytes = 0, depth = 0;
+
+	/* The arm64e build may hand arm_init a pointer that is not boot_args;
+	 * never trust it as the only source. Prefer boot_args.Video when sane,
+	 * otherwise fall back to this board's fixed GOP framebuffer. */
 	memset(ring, 0, sizeof(ring));
 	ring_at = 0;
-	if (args != 0 && args->Video.v_baseAddr != 0 && args->Video.v_width != 0) {
-		boot_progress_bind((uintptr_t)args->Video.v_baseAddr,
-		    args->Video.v_width, args->Video.v_height,
-		    args->Video.v_rowBytes, args->Video.v_depth);
-		boot_progress_start();
-		boot_progress_stage("arm_init: bound from boot_args");
+	if (args != 0) {
+		base = (uintptr_t)args->Video.v_baseAddr;
+		width = args->Video.v_width;
+		height = args->Video.v_height;
+		rowbytes = args->Video.v_rowBytes;
+		depth = args->Video.v_depth;
 	}
+	if (base == 0 || width == 0 || height == 0 ||
+	    rowbytes < width * 4 || base > 0x100000000ull) {
+		base = 0xfc800000ull;
+		width = 1200;
+		height = 2608;
+		rowbytes = 1200 * 4;
+		depth = 32;
+		boot_progress_bind(base, width, height, rowbytes, depth);
+		boot_progress_start();
+		boot_progress_stage("arm_init: bound fixed framebuffer");
+		return;
+	}
+	boot_progress_bind(base, width, height, rowbytes, depth);
+	boot_progress_start();
+	boot_progress_stage("arm_init: bound from boot_args");
 }
 
 int
