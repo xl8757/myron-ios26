@@ -382,13 +382,13 @@ diff --git a/osfmk/arm64/start.s b/osfmk/arm64/start.s
 index d66c616..ebb13d0 100644
 --- a/osfmk/arm64/start.s
 +++ b/osfmk/arm64/start.s
-@@ -473,6 +473,25 @@ start_cpu:
- 	.globl EXT(start_first_cpu)
- LEXT(start_first_cpu)
+@@ -478,6 +478,24 @@ LEXT(start_first_cpu)
+ 	msr		DAIFSet, #(DAIFSC_ALL)				// Disable all interrupts
  
-+	/* Stage 0: a white 64x32 band, no stack or page tables needed. If this shows
-+	 * up on the screen, the kernel was entered; if it does not, the fault is in
-+	 * the loader's hand-off and not in the kernel. */
+ 	mov		x20, x0
++
++	/* Stage 0: white 64x32 band, MMU-off physical write, no stack/PTE needed.
++	 * Placed AFTER mov x20,x0 so boot_args in x0 is already saved. */
 +	MOV64	x0, (0xfc800000 + 2568 * 4800)
 +	mov		w1, #-1
 +	mov		x2, #32
@@ -404,10 +404,9 @@ index d66c616..ebb13d0 100644
 +	subs	x2, x2, #1
 +	b.ne	Lmyron_mark_row
 +	dsb		sy
-+
- 	// Unlock the core for debugging
- 	msr		OSLAR_EL1, xzr
- 	msr		DAIFSet, #(DAIFSC_ALL)				// Disable all interrupts
+ 	mov		x21, #0
+ 
+ 	// Set low reset vector before attempting any loads
 @@ -626,6 +645,22 @@ Lkernelcache_base_found:
  	lsr		x5,  x24, #(ARM_TT_L2_SHIFT)
  	create_bootstrap_mapping x14, x15, x5, x3, x2, x9, x10, x11, x12, x13
