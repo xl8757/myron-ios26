@@ -379,10 +379,10 @@ index 7a4bbd39..fea9411c 100644
  		PE_kputc = serial_putc_crlf;
  	} else {
 diff --git a/osfmk/arm64/start.s b/osfmk/arm64/start.s
-index 6aa6fe4..27638d8 100644
+index d66c616..3f62547 100644
 --- a/osfmk/arm64/start.s
 +++ b/osfmk/arm64/start.s
-@@ -467,6 +467,27 @@ start_cpu:
+@@ -473,6 +473,27 @@ start_cpu:
  	.globl EXT(start_first_cpu)
  LEXT(start_first_cpu)
  
@@ -410,7 +410,7 @@ index 6aa6fe4..27638d8 100644
  	// Unlock the core for debugging
  	msr		OSLAR_EL1, xzr
  	msr		DAIFSet, #(DAIFSC_ALL)				// Disable all interrupts
-@@ -620,6 +641,24 @@ Lkernelcache_base_found:
+@@ -626,6 +647,24 @@ Lkernelcache_base_found:
  	lsr		x5,  x24, #(ARM_TT_L2_SHIFT)
  	create_bootstrap_mapping x14, x15, x5, x3, x2, x9, x10, x11, x12, x13
  
@@ -432,6 +432,6 @@ index 6aa6fe4..27638d8 100644
 +	dsb		ish
 +#endif
 +
- 	/* Ensure TTEs are visible */
- 	dsb		ish
- 
+ 	b Lbootstrap_tables_ready
+ Lbootstrap_tables_exhausted:
+ 	// MMU is still off. Stop with the offending cursor/end preserved for
