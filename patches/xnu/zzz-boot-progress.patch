@@ -379,14 +379,13 @@ index 7a4bbd39..fea9411c 100644
  		PE_kputc = serial_putc_crlf;
  	} else {
 diff --git a/osfmk/arm64/start.s b/osfmk/arm64/start.s
-index d66c616..3f62547 100644
+index d66c616..ebb13d0 100644
 --- a/osfmk/arm64/start.s
 +++ b/osfmk/arm64/start.s
-@@ -473,6 +473,27 @@ start_cpu:
+@@ -473,6 +473,25 @@ start_cpu:
  	.globl EXT(start_first_cpu)
  LEXT(start_first_cpu)
  
-+#if defined(XNU_BOOT_PROGRESS) && XNU_BOOT_PROGRESS
 +	/* Stage 0: a white 64x32 band, no stack or page tables needed. If this shows
 +	 * up on the screen, the kernel was entered; if it does not, the fault is in
 +	 * the loader's hand-off and not in the kernel. */
@@ -405,16 +404,14 @@ index d66c616..3f62547 100644
 +	subs	x2, x2, #1
 +	b.ne	Lmyron_mark_row
 +	dsb		sy
-+#endif
 +
  	// Unlock the core for debugging
  	msr		OSLAR_EL1, xzr
  	msr		DAIFSet, #(DAIFSC_ALL)				// Disable all interrupts
-@@ -626,6 +647,24 @@ Lkernelcache_base_found:
+@@ -626,6 +645,22 @@ Lkernelcache_base_found:
  	lsr		x5,  x24, #(ARM_TT_L2_SHIFT)
  	create_bootstrap_mapping x14, x15, x5, x3, x2, x9, x10, x11, x12, x13
  
-+#if defined(XNU_BOOT_PROGRESS) && XNU_BOOT_PROGRESS
 +	/*
 +	 * Map the splash framebuffer VA=PA as one 32MB Normal-NC block in the EXISTING
 +	 * V=P L2 table. Framebuffer and RAM both fall under L1 index 0, so calling
@@ -430,7 +427,6 @@ index d66c616..3f62547 100644
 +	add		x13, x25, #(2 * PGBYTES)
 +	str		x11, [x13, x12, lsl #TTE_SHIFT]
 +	dsb		ish
-+#endif
 +
  	b Lbootstrap_tables_ready
  Lbootstrap_tables_exhausted:
