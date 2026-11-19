@@ -1109,6 +1109,7 @@ jobs:
             UniXNU/out/myron/**/tree/build/xnu/fileset-reference/**/*.json
             UniXNU/out/myron/**/tree/build/xnu/ios-obj/**/mach.development.bcm2837.unstripped.noctf
           if-no-files-found: warn
+          retention-days: 1
       - name: Upload the bootable kernel
         if: always()
         uses: actions/upload-artifact@v4
@@ -1120,7 +1121,7 @@ jobs:
             UniXNU/out/myron/**/kernel/kernel.json
             UniXNU/out/myron/**/payload/**
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 1
       - name: Report the kernel
         if: always()
         run: |
@@ -1139,5 +1140,5 @@ jobs:
           name: kernel-build-logs
           path: UniXNU/out/**/logs/
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 1
 
