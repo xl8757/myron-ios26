@@ -183,11 +183,11 @@ index d1324571..72d35614 100644
 @@ -376,6 +377,11 @@ arm_init(
  #endif /* defined(HAS_APPLE_PAC) */
  
-+	/* PSCI reset just before PE_init_platform. */
+ 	PE_init_platform(FALSE, args); /* Get platform expert set up */
++	/* PSCI reset just after PE_init_platform. */
 +	__asm__ volatile("mov x0, #9\n\t"
 +	                 "movk x0, #0x8400, lsl #16\n\t"
 +	                 "smc #0" ::: "x0", "memory");
- 	PE_init_platform(FALSE, args); /* Get platform expert set up */
 +	boot_progress_init(args);
  
  #if __arm64__
