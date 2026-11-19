@@ -429,16 +429,3 @@ index d66c616..ebb13d0 100644
  	b Lbootstrap_tables_ready
  Lbootstrap_tables_exhausted:
  	// MMU is still off. Stop with the offending cursor/end preserved for
-@@ -764,6 +782,12 @@ common_start:
- 	MOV64   x0, SCTLR_EL1_DEFAULT
- 	MSR_SCTLR_EL1_X0
- 	isb		sy
-+
-+	/* Stage 3: PSCI SYSTEM_RESET right after MMU enable. Device rebooting
-+	 * back to Android is an unambiguous signal that we got past this point. */
-+	mov	x0, #9
-+	movk	x0, #0x8400, lsl #16
-+	smc	#0
- 
- #if !VMAPPLE
- 	MOV64	x1, SCTLR_EL1_DEFAULT
