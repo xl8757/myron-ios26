@@ -444,3 +444,25 @@ index d66c616..ebb13d0 100644
  	b Lbootstrap_tables_ready
  Lbootstrap_tables_exhausted:
  	// MMU is still off. Stop with the offending cursor/end preserved for
+@@ -764,6 +797,21 @@ common_start:
+ 	MOV64   x0, SCTLR_EL1_DEFAULT
+ 	MSR_SCTLR_EL1_X0
+ 	isb		sy
++
++	/* Stage 3: green bar - MMU enabled (x9-x14, preserves x0/x1) */
++	MOV64	x9, (0xfc800000 + 2432 * 4800)
++	MOV64	x10, 0xff00ff00
++	mov	x11, #32
++	mov	x12, #4800
++Lm3row:	mov	x13, #64
++	mov	x14, x9
++Lm3pix:	str	w10, [x14], #4
++	subs	x13, x13, #1
++	b.ne	Lm3pix
++	add	x9, x9, x12
++	subs	x11, x11, #1
++	b.ne	Lm3row
++	dsb	sy
+ 
+ #if !VMAPPLE
+ 	MOV64	x1, SCTLR_EL1_DEFAULT
