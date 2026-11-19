@@ -343,7 +343,7 @@ jobs:
                      and 'sm8550-common' not in entry.replace('\\', '/')]
           assert not retired, f'the iOS 16 series is being applied: {retired}'
           shared = [e for e in order if 'patches/xnu-12377' in e.replace(chr(92), '/')]
-          # 69 arch + 1 os from the shared trees, 2 device patches from the
+          # 69 arch + 1 os from the shared trees, 1 vendored SoC patch from the
           # device series. The vendored copy lives in patches/xnu26/, so it is
           # not counted as a UniXNU-sm8550-common entry.
           print(f'shared patches: {len(shared)}, total: {len(order)}')
@@ -572,6 +572,19 @@ jobs:
       # The kernel build itself hits the same diagnostic 1156 times and keeps
       # going, because BUILD_WERROR is 0 there. Only this one warning is
       # downgraded; every other -Werror check on the driver sources stands.
+      # The OS series applies UniXNU's copy of zzz-boot-progress.patch, which
+      # declares boot_progress_init(void). Our build-boot-progress.py now calls
+      # it with boot_args* so the diagnostic can bind the loader's framebuffer
+      # at arm_init. Overlay the device copy of the patch (same file, three
+      # signature lines changed) before the kernel step applies the series.
+      - name: Use the device boot-progress patch with the early-bind signature
+        run: |
+          src=myron-ios26/patches/xnu/zzz-boot-progress.patch
+          dst=UniXNU/patches/xnu-12377/zzz-boot-progress.patch
+          test -f "$src" && test -f "$dst"
+          cp "$src" "$dst"
+          grep -n 'boot_progress_init(boot_args' "$dst"
+
       - name: Let the archive replay tolerate the target-version override
         run: |
           python3 - <<'PY'
@@ -1109,7 +1122,6 @@ jobs:
             UniXNU/out/myron/**/tree/build/xnu/fileset-reference/**/*.json
             UniXNU/out/myron/**/tree/build/xnu/ios-obj/**/mach.development.bcm2837.unstripped.noctf
           if-no-files-found: warn
-          retention-days: 1
       - name: Upload the bootable kernel
         if: always()
         uses: actions/upload-artifact@v4
@@ -1121,7 +1133,7 @@ jobs:
             UniXNU/out/myron/**/kernel/kernel.json
             UniXNU/out/myron/**/payload/**
           if-no-files-found: warn
-          retention-days: 1
+          retention-days: 14
       - name: Report the kernel
         if: always()
         run: |
@@ -1140,5 +1152,5 @@ jobs:
           name: kernel-build-logs
           path: UniXNU/out/**/logs/
           if-no-files-found: ignore
-          retention-days: 1
+          retention-days: 14
 
