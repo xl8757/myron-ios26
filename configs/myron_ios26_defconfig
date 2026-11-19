@@ -69,6 +69,11 @@ CONFIG_XNU_DT_PANIC_REGION=y
 CONFIG_XNU_OWNER_ROOT_AUDIT=y
 CONFIG_XNU_SOURCE_CORECRYPTO14=y
 CONFIG_XNU_BOOT_PROGRESS=y
+
+# Paint stage markers straight into the GOP framebuffer from start.s/arm_init.
+# The bare-metal loader route has no UEFI GOP or display provider for boot-progress,
+# so this is the only way to see how far XNU gets.
+CONFIG_XNU_MYRON_EARLY=y
 # Supplies the cs_native4k_* counters the vendored BootLog.c references; see the
 # note above.
 CONFIG_XNU_NATIVE_CS_HASH_CACHE=y

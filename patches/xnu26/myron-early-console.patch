@@ -1,0 +1,245 @@
+diff --git a/osfmk/arm/arm_init.c b/osfmk/arm/arm_init.c
+--- a/osfmk/arm/arm_init.c
++++ b/osfmk/arm/arm_init.c
+@@ -215,1 +215,2 @@
+ #include <mach/dyld_kernel_fixups.h>
++#include <arm64/myron_early.h>
+@@ -378,1 +378,2 @@
+ 	PE_init_platform(FALSE, args); /* Get platform expert set up */
++	myron_early_mark(2, "PE_init_platform done");
+@@ -461,1 +461,2 @@
+ 	ml_parse_cpu_topology();
++	myron_early_mark(3, "ml_parse_cpu_topology done");
+@@ -492,1 +492,2 @@
+ 	cpu_bootstrap();
++	myron_early_mark(4, "cpu_bootstrap done");
+@@ -497,1 +497,2 @@
+ 	kernel_startup_bootstrap();
++	myron_early_mark(5, "kernel_startup_bootstrap done");
+@@ -504,1 +504,2 @@
+ 	cpu_init();
++	myron_early_mark(6, "cpu_init done");
+@@ -572,1 +572,2 @@
+ 	arm_vm_init(xmaxmem, args);
++	myron_early_mark(7, "entering arm_vm_init");
+diff --git a/osfmk/arm64/start.s b/osfmk/arm64/start.s
+--- a/osfmk/arm64/start.s
++++ b/osfmk/arm64/start.s
+@@ -468,1 +468,22 @@
+ LEXT(start_first_cpu)
++
++#if defined(XNU_MYRON_EARLY) && XNU_MYRON_EARLY
++	/* Stage 0: a white 64x32 band, no stack or page tables needed. If this shows
++	 * up on the screen, the kernel was entered; if it does not, the fault is in
++	 * the loader's hand-off and not in the kernel. */
++	MOV64	x0, (0xfc800000 + 2568 * 4800)
++	mov		w1, #-1
++	mov		x2, #32
++	mov		x4, #4800
++Lmyron_mark_row:
++	mov		x3, #64
++	mov		x5, x0
++Lmyron_mark_pixel:
++	str		w1, [x5], #4
++	subs	x3, x3, #1
++	b.ne	Lmyron_mark_pixel
++	add		x0, x0, x4
++	subs	x2, x2, #1
++	b.ne	Lmyron_mark_row
++	dsb		sy
++#endif
+@@ -621,1 +621,19 @@
+ 	create_bootstrap_mapping x14, x15, x5, x3, x2, x9, x10, x11, x12, x13
++
++#if defined(XNU_MYRON_EARLY) && XNU_MYRON_EARLY
++	/*
++	 * Map the splash framebuffer VA=PA as one 32MB Normal-NC block in the EXISTING
++	 * V=P L2 table. Framebuffer and RAM both fall under L1 index 0, so calling
++	 * create_bootstrap_mapping again would replace the RAM L2 table rather than add
++	 * to it. All bring-up RAM and the framebuffer are below 4GB, so the V=P L2 page
++	 * is bootstrap_pagetables + 2*PGBYTES.
++	 */
++	MOV64	x10, 0xfc800000
++	MOV64	x11, (ARM_TTE_TYPE_BLOCK | ARM_TTE_VALID | ARM_TTE_BLOCK_SH(SH_OUTER_MEMORY) | ARM_TTE_BLOCK_ATTRINDX(CACHE_ATTRINDX_WIRED))
++	orr		x11, x11, x10
++	and		x12, x10, #(ARM_TT_L2_INDEX_MASK)
++	lsr		x12, x12, #(ARM_TT_L2_SHIFT)
++	add		x13, x25, #(2 * PGBYTES)
++	str		x11, [x13, x12, lsl #TTE_SHIFT]
++	dsb		ish
++#endif
+diff --git a/osfmk/arm64/myron_early.h b/osfmk/arm64/myron_early.h
+new file mode 100644
+--- /dev/null
++++ b/osfmk/arm64/myron_early.h
+@@ -0,0 +1,21 @@
++/* Early screen diagnostics for myron, valid only while the bootstrap TTBR0 is live. */
++#ifndef _ARM64_MYRON_EARLY_H_
++#define _ARM64_MYRON_EARLY_H_
++
++#include <pexpert/arm64/board_config.h>
++#include <stdarg.h>
++
++#if defined(XNU_MYRON_EARLY) && XNU_MYRON_EARLY
++void myron_early_mark(unsigned int stage, const char *label);
++void myron_early_putc(char c);
++void myron_early_disable(void);
++#else
++static inline void myron_early_mark(unsigned int stage, const char *label)
++{
++	(void)stage;
++	(void)label;
++}
++static inline void myron_early_disable(void) {}
++#endif
++
++#endif
+diff --git a/osfmk/arm64/myron_early.c b/osfmk/arm64/myron_early.c
+new file mode 100644
+--- /dev/null
++++ b/osfmk/arm64/myron_early.c
+@@ -0,0 +1,138 @@
++/*
++ * Early screen diagnostics for the Redmi K90 Pro Max (myron, SM8850).
++ *
++ * Adapted from ios-sweet's osfmk/arm64/sweet_early.c. The phone has no serial port,
++ * so before the kernel owns a console the screen is the only way to see how far it
++ * got. A kernel that dies silently and a kernel that never started look identical
++ * otherwise - this port spent several boots on exactly that ambiguity.
++ *
++ * No allocation, no locks, no ADT parsing, no per-CPU state: panic() can reach this
++ * before a current thread exists. start.s maps the framebuffer VA=PA as Normal
++ * Non-Cacheable memory so the stores land without the MMU being fully up.
++ *
++ * That mapping lives in the bootstrap TTBR0 and does not survive arm_vm_init, so
++ * sweet_early_disable() is called at the last point it is still valid.
++ *
++ * Differences from the ios-sweet original are the board's own numbers:
++ *   framebuffer  0xfc800000  (Display_Reserved in the firmware memory map)
++ *   geometry     1200x2608, stride 1200*4
++ * The sweet original is 0x9c000000 and 1080x2400.
++ */
++#include <arm64/myron_early.h>
++
++#if defined(XNU_MYRON_EARLY) && XNU_MYRON_EARLY
++
++#include <stdint.h>
++#include <kern/misc_protos.h>
++
++#define EARLY_FB ((volatile uint32_t *)(uintptr_t)0xfc800000)
++#define EARLY_WIDTH 1200u
++#define EARLY_HEIGHT 2608u
++#define EARLY_STRIDE (1200u * 4u / 4u)
++#define EARLY_SCALE 2u
++#define EARLY_CELL_W (8u * EARLY_SCALE)
++#define EARLY_CELL_H (16u * EARLY_SCALE)
++#define EARLY_ROWS ((EARLY_HEIGHT - 40u) / EARLY_CELL_H)
++#define EARLY_COLS (EARLY_WIDTH / EARLY_CELL_W)
++
++extern unsigned char iso_font[256 * 16];
++
++/* Initialized data must remain writable until disable, including panics. */
++static unsigned int early_row, early_col;
++static unsigned int early_started, early_disabled;
++
++static void
++myron_early_clear_row(void)
++{
++	for (unsigned int y = 0; y < EARLY_CELL_H; y++) {
++		volatile uint32_t *line = EARLY_FB + (early_row * EARLY_CELL_H + y) * EARLY_STRIDE;
++		for (unsigned int x = 0; x < EARLY_WIDTH; x++) {
++			line[x] = 0xff000000u;
++		}
++	}
++}
++
++void
++myron_early_putc(char c)
++{
++	if (early_disabled) {
++		return;
++	}
++	if (!early_started) {
++		early_started = 1;
++		myron_early_clear_row();
++	}
++	if (c == '\r') {
++		early_col = 0;
++		return;
++	}
++	if (c == '\n' || early_col == EARLY_COLS) {
++		early_col = 0;
++		early_row = (early_row + 1) % EARLY_ROWS;
++		myron_early_clear_row();
++		if (c == '\n') {
++			return;
++		}
++	}
++	const unsigned char *glyph = iso_font + (unsigned char)c * 16;
++	for (unsigned int gy = 0; gy < 16; gy++) {
++		for (unsigned int sy = 0; sy < EARLY_SCALE; sy++) {
++			volatile uint32_t *line = EARLY_FB +
++			    (early_row * EARLY_CELL_H + gy * EARLY_SCALE + sy) * EARLY_STRIDE +
++			    early_col * EARLY_CELL_W;
++			for (unsigned int gx = 0; gx < 8; gx++) {
++				uint32_t pixel = (glyph[gy] & (1u << gx)) ? 0xffffffffu : 0xff000000u;
++				for (unsigned int sx = 0; sx < EARLY_SCALE; sx++) {
++					line[gx * EARLY_SCALE + sx] = pixel;
++				}
++			}
++		}
++	}
++	early_col++;
++}
++
++static void
++myron_early_string(const char *s)
++{
++	while (*s) {
++		myron_early_putc(*s++);
++	}
++}
++
++/*
++ * Draw one stage marker and print its label. The band at the bottom of the screen
++ * fills in as the stages complete, so a photo taken at any point says exactly which
++ * one was reached even if the text has scrolled.
++ */
++void
++myron_early_mark(unsigned int stage, const char *label)
++{
++	if (early_disabled || stage > 8) {
++		return;
++	}
++	uint32_t color = 0xff00ff00u | (stage * 28u << 16);
++	for (unsigned int y = EARLY_HEIGHT - 40u; y < EARLY_HEIGHT; y++) {
++		for (unsigned int x = stage * 64u; x < (stage + 1u) * 64u && x < EARLY_WIDTH; x++) {
++			EARLY_FB[y * EARLY_STRIDE + x] = color;
++		}
++	}
++	__asm__ volatile("dsb sy" ::: "memory");
++	myron_early_string("MYRON EARLY ");
++	myron_early_putc((char)('0' + stage));
++	myron_early_string(": ");
++	myron_early_string(label);
++	myron_early_putc('\n');
++}
++
++/*
++ * The framebuffer mapping is part of the bootstrap page tables and arm_vm_init tears
++ * them down. Touch nothing after that point: a write would fault, and a fault here
++ * looks exactly like the failure this file exists to diagnose.
++ */
++void
++myron_early_disable(void)
++{
++	early_disabled = 1;
++}
++
++#endif /* XNU_MYRON_EARLY */
+diff --git a/osfmk/conf/files.arm64 b/osfmk/conf/files.arm64
+--- a/osfmk/conf/files.arm64
++++ b/osfmk/conf/files.arm64
+@@ -51,1 +51,2 @@
+ osfmk/arm64/dbgwrap.c		standard
++osfmk/arm64/myron_early.c		standard
