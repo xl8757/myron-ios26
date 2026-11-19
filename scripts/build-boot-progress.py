@@ -140,37 +140,26 @@ boot_progress_bind(uintptr_t framebuffer, unsigned width, unsigned height,
 void
 boot_progress_init(void *arg)
 {
-	boot_args *args = arg;
-	uintptr_t base = 0;
-	unsigned width = 0, height = 0, rowbytes = 0, depth = 0;
+	volatile uint32_t *fb;
+	unsigned x, y;
 
-	/* The arm64e build may hand arm_init a pointer that is not boot_args;
-	 * never trust it as the only source. Prefer boot_args.Video when sane,
-	 * otherwise fall back to this board's fixed GOP framebuffer. */
+	/* The arm64e build may pass arm_init a pointer that is not boot_args;
+	 * reading Video from it yields garbage. Bind this board's fixed GOP
+	 * framebuffer unconditionally. */
+	(void)arg;
 	memset(ring, 0, sizeof(ring));
 	ring_at = 0;
-	if (args != 0) {
-		base = (uintptr_t)args->Video.v_baseAddr;
-		width = args->Video.v_width;
-		height = args->Video.v_height;
-		rowbytes = args->Video.v_rowBytes;
-		depth = args->Video.v_depth;
-	}
-	if (base == 0 || width == 0 || height == 0 ||
-	    rowbytes < width * 4 || base > 0x100000000ull) {
-		base = 0xfc800000ull;
-		width = 1200;
-		height = 2608;
-		rowbytes = 1200 * 4;
-		depth = 32;
-		boot_progress_bind(base, width, height, rowbytes, depth);
-		boot_progress_start();
-		boot_progress_stage("arm_init: bound fixed framebuffer");
-		return;
-	}
-	boot_progress_bind(base, width, height, rowbytes, depth);
+	boot_progress_bind(0xfc800000ull, 1200, 2608, 1200 * 4, 32);
+
+	/* A solid magenta bar, no font dependency: if this appears, C-side
+	 * framebuffer writes work under the boot MMU and only text is at fault. */
+	fb = (volatile uint32_t *)0xfc800000ull;
+	for (y = 100; y < 140; y++)
+		for (x = 0; x < 400; x++)
+			fb[y * 1200 + x] = 0xffff00ffu;
+
 	boot_progress_start();
-	boot_progress_stage("arm_init: bound from boot_args");
+	boot_progress_stage("arm_init: bound fixed framebuffer");
 }
 
 int
