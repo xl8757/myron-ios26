@@ -378,3 +378,60 @@ index 7a4bbd39..fea9411c 100644
  	if (serial_init()) {
  		PE_kputc = serial_putc_crlf;
  	} else {
+diff --git a/osfmk/arm64/start.s b/osfmk/arm64/start.s
+index 6aa6fe4..27638d8 100644
+--- a/osfmk/arm64/start.s
++++ b/osfmk/arm64/start.s
+@@ -467,6 +467,27 @@ start_cpu:
+ 	.globl EXT(start_first_cpu)
+ LEXT(start_first_cpu)
+ 
++#if defined(XNU_BOOT_PROGRESS) && XNU_BOOT_PROGRESS
++	/* Stage 0: a white 64x32 band, no stack or page tables needed. If this shows
++	 * up on the screen, the kernel was entered; if it does not, the fault is in
++	 * the loader's hand-off and not in the kernel. */
++	MOV64	x0, (0xfc800000 + 2568 * 4800)
++	mov		w1, #-1
++	mov		x2, #32
++	mov		x4, #4800
++Lmyron_mark_row:
++	mov		x3, #64
++	mov		x5, x0
++Lmyron_mark_pixel:
++	str		w1, [x5], #4
++	subs	x3, x3, #1
++	b.ne	Lmyron_mark_pixel
++	add		x0, x0, x4
++	subs	x2, x2, #1
++	b.ne	Lmyron_mark_row
++	dsb		sy
++#endif
++
+ 	// Unlock the core for debugging
+ 	msr		OSLAR_EL1, xzr
+ 	msr		DAIFSet, #(DAIFSC_ALL)				// Disable all interrupts
+@@ -620,6 +641,24 @@ Lkernelcache_base_found:
+ 	lsr		x5,  x24, #(ARM_TT_L2_SHIFT)
+ 	create_bootstrap_mapping x14, x15, x5, x3, x2, x9, x10, x11, x12, x13
+ 
++#if defined(XNU_BOOT_PROGRESS) && XNU_BOOT_PROGRESS
++	/*
++	 * Map the splash framebuffer VA=PA as one 32MB Normal-NC block in the EXISTING
++	 * V=P L2 table. Framebuffer and RAM both fall under L1 index 0, so calling
++	 * create_bootstrap_mapping again would replace the RAM L2 table rather than add
++	 * to it. All bring-up RAM and the framebuffer are below 4GB, so the V=P L2 page
++	 * is bootstrap_pagetables + 2*PGBYTES.
++	 */
++	MOV64	x10, 0xfc800000
++	MOV64	x11, (ARM_TTE_TYPE_BLOCK | ARM_TTE_VALID | ARM_TTE_BLOCK_SH(SH_OUTER_MEMORY) | ARM_TTE_BLOCK_ATTRINDX(CACHE_ATTRINDX_WIRED))
++	orr		x11, x11, x10
++	and		x12, x10, #(ARM_TT_L2_INDEX_MASK)
++	lsr		x12, x12, #(ARM_TT_L2_SHIFT)
++	add		x13, x25, #(2 * PGBYTES)
++	str		x11, [x13, x12, lsl #TTE_SHIFT]
++	dsb		ish
++#endif
++
+ 	/* Ensure TTEs are visible */
+ 	dsb		ish
+ 
