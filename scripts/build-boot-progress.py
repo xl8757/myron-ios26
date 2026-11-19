@@ -138,8 +138,9 @@ boot_progress_bind(uintptr_t framebuffer, unsigned width, unsigned height,
 }
 
 void
-boot_progress_init(boot_args *args)
+boot_progress_init(void *arg)
 {
+	boot_args *args = arg;
 	/* Bind straight from boot_args.Video: initialize_screen() may never be
 	 * reached on the bare-metal loader route, so waiting for it to bind
 	 * would leave the diagnostic permanently unreachable. The loader filled
