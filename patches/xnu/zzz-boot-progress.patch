@@ -407,25 +407,10 @@ index d66c616..ebb13d0 100644
  	mov		x21, #0
  
  	// Set low reset vector before attempting any loads
-@@ -626,6 +645,36 @@ Lkernelcache_base_found:
+@@ -626,6 +645,21 @@ Lkernelcache_base_found:
  	lsr		x5,  x24, #(ARM_TT_L2_SHIFT)
  	create_bootstrap_mapping x14, x15, x5, x3, x2, x9, x10, x11, x12, x13
  
-+	/*
-+	 * Map the splash framebuffer VA=PA as one 32MB Normal-NC block in the EXISTING
-+	 * V=P L2 table. Framebuffer and RAM both fall under L1 index 0, so calling
-+	 * create_bootstrap_mapping again would replace the RAM L2 table rather than add
-+	 * to it. All bring-up RAM and the framebuffer are below 4GB, so the V=P L2 page
-+	 * is bootstrap_pagetables + 2*PGBYTES.
-+	 */
-+	MOV64	x10, 0xfc800000
-+	MOV64	x11, (ARM_TTE_BOOT_BLOCK_LOWER | ARM_TTE_BOOT_BLOCK_UPPER)
-+	orr		x11, x11, x10
-+	and		x12, x10, #(ARM_TT_L2_INDEX_MASK)
-+	lsr		x12, x12, #(ARM_TT_L2_SHIFT)
-+	add		x13, x25, #(2 * PGBYTES)
-+	str		x11, [x13, x12, lsl #TTE_SHIFT]
-+	dsb		ish
 +	/* Stage 2: red bar - bootstrap page tables built, MMU still off */
 +	MOV64	x0, (0xfc800000 + 2500 * 4800)
 +	MOV64	x1, 0xffff0000
@@ -444,7 +429,7 @@ index d66c616..ebb13d0 100644
  	b Lbootstrap_tables_ready
  Lbootstrap_tables_exhausted:
  	// MMU is still off. Stop with the offending cursor/end preserved for
-@@ -764,6 +797,21 @@ common_start:
+@@ -764,6 +782,21 @@ common_start:
  	MOV64   x0, SCTLR_EL1_DEFAULT
  	MSR_SCTLR_EL1_X0
  	isb		sy
