@@ -429,3 +429,17 @@ index d66c616..ebb13d0 100644
  	b Lbootstrap_tables_ready
  Lbootstrap_tables_exhausted:
  	// MMU is still off. Stop with the offending cursor/end preserved for
+@@ -766,9 +784,13 @@ common_start:
+ 	isb		sy
+ 
+ #if !VMAPPLE
+ 	MOV64	x1, SCTLR_EL1_DEFAULT
+ 	cmp		x0, x1
+ 	bne		.
++	/* PSCI reset right after SCTLR self-check (x0 is dead after this). */
++	mov	x0, #9
++	movk	x0, #0x8400, lsl #16
++	smc	#0
+ #endif /* !VMAPPLE */
+ 
+ #if (!CONFIG_KERNEL_INTEGRITY || (CONFIG_KERNEL_INTEGRITY && !defined(KERNEL_INTEGRITY_WT)))
