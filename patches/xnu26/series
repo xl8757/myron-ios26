@@ -45,8 +45,3 @@ sheng-platform-power.patch
 # iokit hunk was written against a tree at 2026-11-16 and applies on top of the
 # arm64e series this board already resolves.
 sheng-platform-sleep.patch
-
-# Direct framebuffer diagnostics from the kernel first instruction.
-# Needed on the bare-metal loader route: boot-progress needs a display provider
-# this kernel does not carry, so paint markers straight into the GOP framebuffer.
-myron-early-console.patch
