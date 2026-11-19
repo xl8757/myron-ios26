@@ -573,17 +573,21 @@ jobs:
       # going, because BUILD_WERROR is 0 there. Only this one warning is
       # downgraded; every other -Werror check on the driver sources stands.
       # The OS series applies UniXNU's copy of zzz-boot-progress.patch, which
-      # declares boot_progress_init(void). Our build-boot-progress.py now calls
-      # it with boot_args* so the diagnostic can bind the loader's framebuffer
-      # at arm_init. Overlay the device copy of the patch (same file, three
-      # signature lines changed) before the kernel step applies the series.
+      # declares boot_progress_init(void). Our build-boot-progress.py passes the
+      # loader's boot_args so the diagnostic can bind the framebuffer at
+      # arm_init; the public header uses void* (it is included before boot_args
+      # is declared), and the implementation casts back to boot_args*. Overlay
+      # the device copy of the patch (upstream XNU context, three signature
+      # lines changed) before the kernel step applies the series.
       - name: Use the device boot-progress patch with the early-bind signature
         run: |
           src=myron-ios26/patches/xnu/zzz-boot-progress.patch
           dst=UniXNU/patches/xnu-12377/zzz-boot-progress.patch
           test -f "$src" && test -f "$dst"
           cp "$src" "$dst"
-          grep -n 'boot_progress_init(boot_args' "$dst"
+          grep -n 'boot_progress_init(args);' "$dst"
+          grep -n 'void boot_progress_init(void \*);' "$dst"
+          grep -n 'define boot_progress_init(args)' "$dst"
 
       - name: Let the archive replay tolerate the target-version override
         run: |
