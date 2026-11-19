@@ -142,10 +142,6 @@ boot_progress_init(void *arg)
 {
 	volatile uint32_t *fb;
 	unsigned x, y;
-	/* PSCI SYSTEM_RESET: an unambiguous signal that arm_init reached here. */
-	__asm__ volatile("mov x0, #9\n\t"
-	                 "movk x0, #0x8400, lsl #16\n\t"
-	                 "smc #0" ::: "x0", "memory");
 
 	/* The arm64e build may pass arm_init a pointer that is not boot_args;
 	 * reading Video from it yields garbage. Bind this board's fixed GOP
