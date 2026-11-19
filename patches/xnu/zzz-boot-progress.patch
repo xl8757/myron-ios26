@@ -1,5 +1,5 @@
 diff --git a/bsd/kern/bsd_init.c b/bsd/kern/bsd_init.c
-index 201050b..58c674a 100644
+index 7febaca6..5bc65a1e 100644
 --- a/bsd/kern/bsd_init.c
 +++ b/bsd/kern/bsd_init.c
 @@ -1,3 +1,4 @@
@@ -7,7 +7,7 @@ index 201050b..58c674a 100644
  /*
   * Copyright (c) 2000-2021 Apple Inc. All rights reserved.
   *
-@@ -561,6 +562,7 @@ native_mobile_graphics_load_probe(void)
+@@ -569,6 +570,7 @@ native_mobile_graphics_load_probe(void)
  void
  bsd_init(void)
  {
@@ -15,7 +15,7 @@ index 201050b..58c674a 100644
  	struct uthread *ut;
  	vnode_t init_rootvnode = NULLVP;
  	struct proc_ro_data kernproc_ro_data = {
-@@ -580,7 +582,7 @@ bsd_init(void)
+@@ -588,7 +590,7 @@ bsd_init(void)
  #if DEBUG_BSDINIT
  #define bsd_init_kprintf(x, ...) kprintf("bsd_init: " x, ## __VA_ARGS__)
  #else
@@ -24,7 +24,7 @@ index 201050b..58c674a 100644
  #endif
  
  	throttle_init();
-@@ -768,7 +770,9 @@ bsd_init(void)
+@@ -778,7 +780,9 @@ bsd_init(void)
  
  #if defined(XNU_SHENG_PMGR) && XNU_SHENG_PMGR
  	extern void sheng_pmgr_run(void);
@@ -34,7 +34,7 @@ index 201050b..58c674a 100644
  #endif
  
  	/*
-@@ -991,7 +995,9 @@ bsd_init(void)
+@@ -1017,7 +1021,9 @@ bsd_init(void)
  #endif
  
  		bsd_init_kprintf("vfs_mountroot\n");
@@ -44,7 +44,7 @@ index 201050b..58c674a 100644
  			break;
  		}
  		rootdevice[0] = '\0';
-@@ -1078,6 +1084,7 @@ bsd_init(void)
+@@ -1104,6 +1110,7 @@ bsd_init(void)
  				extern void native_owner_root_accepted_checkpoint(int, int);
  				native_owner_root_accepted = owner_authorized;
  				native_owner_root_accepted_checkpoint(autherr, owner_authorized);
@@ -53,7 +53,7 @@ index 201050b..58c674a 100644
  #endif
  		}
 diff --git a/bsd/kern/kern_exec.c b/bsd/kern/kern_exec.c
-index fc0d333..e59c50a 100644
+index 0daa1a2e..b823dc0d 100644
 --- a/bsd/kern/kern_exec.c
 +++ b/bsd/kern/kern_exec.c
 @@ -1,3 +1,4 @@
@@ -61,7 +61,7 @@ index fc0d333..e59c50a 100644
  /*
   * Copyright (c) 2000-2020 Apple Inc. All rights reserved.
   *
-@@ -1314,7 +1315,9 @@ grade:
+@@ -2075,7 +2076,9 @@ grade:
  	/*
  	 * Actually load the image file we previously decided to load.
  	 */
@@ -71,7 +71,7 @@ index fc0d333..e59c50a 100644
  	if (lret != LOAD_SUCCESS) {
  		error = load_return_to_errno(lret);
  
-@@ -7921,6 +7924,7 @@ static const char * init_programs[] = {
+@@ -9098,6 +9101,7 @@ static const char * init_programs[] = {
  void
  load_init_program(proc_t p)
  {
@@ -79,8 +79,8 @@ index fc0d333..e59c50a 100644
  	uint32_t i;
  	int error;
  	vm_map_t map = current_map();
-@@ -7930,12 +7934,23 @@ load_init_program(proc_t p)
- 	(void) mach_vm_allocate_kernel(map, &scratch_addr, map_page_size, VM_FLAGS_ANYWHERE, VM_KERN_MEMORY_NONE);
+@@ -9113,12 +9117,23 @@ load_init_program(proc_t p)
+ 	    VM_MAP_KERNEL_FLAGS_ANYWHERE());
  	user_addr_t init_envp = USER_ADDR_NULL;
  #if defined(XNU_OWNER_CACHE_MOUNT) && XNU_OWNER_CACHE_MOUNT
 +	boot_progress_stage("SystemOS mount enter");
@@ -103,7 +103,7 @@ index fc0d333..e59c50a 100644
  #endif
  #if CONFIG_MEMORYSTATUS
  	(void) memorystatus_init_at_boot_snapshot();
-@@ -8432,6 +8447,7 @@ process_signature(proc_t p, struct image_params *imgp)
+@@ -9647,6 +9662,7 @@ process_signature(proc_t p, struct image_params *imgp)
  	 * approve of exec, kill and return immediately.
  	 */
  	if (imgp->ip_mac_return != 0) {
@@ -111,7 +111,7 @@ index fc0d333..e59c50a 100644
  		KERNEL_DEBUG_CONSTANT(BSDDBG_CODE(DBG_BSD_PROC, BSD_PROC_EXITREASON_CREATE) | DBG_FUNC_NONE,
  		    proc_getpid(p), OS_REASON_EXEC, EXEC_EXIT_REASON_SECURITY_POLICY, 0, 0);
  		signature_failure_reason = os_reason_create(OS_REASON_EXEC, EXEC_EXIT_REASON_SECURITY_POLICY);
-@@ -8594,7 +8610,9 @@ done:
+@@ -9823,7 +9839,9 @@ done:
  		 * state.
  		 */
  
@@ -122,7 +122,7 @@ index fc0d333..e59c50a 100644
  
  	if (0 == error) {
 diff --git a/bsd/kern/kern_exit.c b/bsd/kern/kern_exit.c
-index 48a0198..c4a4c74 100644
+index b5633e45..b1ac3ad3 100644
 --- a/bsd/kern/kern_exit.c
 +++ b/bsd/kern/kern_exit.c
 @@ -1,3 +1,4 @@
@@ -130,7 +130,7 @@ index 48a0198..c4a4c74 100644
  /*
   * Copyright (c) 2000-2016 Apple Inc. All rights reserved.
   *
-@@ -1801,7 +1802,11 @@ proc_handle_critical_exit(proc_t p, int rv)
+@@ -1989,7 +1990,11 @@ proc_handle_critical_exit(proc_t p, int rv)
  	}
  
  	const char *prefix_str;
@@ -142,7 +142,7 @@ index 48a0198..c4a4c74 100644
  
  	if (p == initproc) {
  		if (strnstr(p->p_name, "preinit", sizeof(p->p_name))) {
-@@ -1814,6 +1819,7 @@ proc_handle_critical_exit(proc_t p, int rv)
+@@ -2002,6 +2007,7 @@ proc_handle_critical_exit(proc_t p, int rv)
  	} else {
  		/* For processes that aren't launchd, just use the process name and pid */
  		snprintf(prefix_str_buf, sizeof(prefix_str_buf), "%s[%d] exited", p->p_name, proc_getpid(p));
@@ -150,9 +150,9 @@ index 48a0198..c4a4c74 100644
  		prefix_str = prefix_str_buf;
  	}
  
-@@ -1845,6 +1851,10 @@ proc_prepareexit(proc_t p, int rv, boolean_t perf_notify)
- 	int kr = 0;
- 	int create_corpse = FALSE;
+@@ -2037,6 +2043,10 @@ proc_prepareexit(proc_t p, int rv, boolean_t perf_notify)
+ 	task_t task = proc_task(p);
+ 
  
 +	boot_progress_exit(proc_getpid(p),p->p_name,rv,
 +	    p->p_exit_reason ? p->p_exit_reason->osr_namespace : 0,
@@ -162,15 +162,15 @@ index 48a0198..c4a4c74 100644
  		proc_handle_critical_exit(p, rv);
  	}
 diff --git a/osfmk/arm/arm_init.c b/osfmk/arm/arm_init.c
-index 85906cd..e6f63aa 100644
+index d1324571..72d35614 100644
 --- a/osfmk/arm/arm_init.c
 +++ b/osfmk/arm/arm_init.c
 @@ -1,3 +1,4 @@
 +#include <kern/boot_progress.h>
  /*
-  * Copyright (c) 2007-2021 Apple Inc. All rights reserved.
+  * Copyright (c) 2007-2024 Apple Inc. All rights reserved.
   *
-@@ -361,6 +362,7 @@ arm_init(
+@@ -376,6 +377,7 @@ arm_init(
  #endif /* defined(HAS_APPLE_PAC) */
  
  	PE_init_platform(FALSE, args); /* Get platform expert set up */
@@ -178,9 +178,9 @@ index 85906cd..e6f63aa 100644
  
  #if __arm64__
  	configure_timer_apple_regs();
-@@ -522,7 +524,9 @@ arm_init(
- 	__builtin_arm_wsr("pan", 1);
- #endif  /* __ARM_PAN_AVAILABLE__ */
+@@ -579,7 +581,9 @@ arm_init(
+ 	gDramSize = *dram_size;
+ 	pmap_first_pnum = (ppnum_t)atop(gDramBase);
  
 +	boot_progress_stage("arm_vm_init enter");
  	arm_vm_init(xmaxmem, args);
@@ -189,31 +189,31 @@ index 85906cd..e6f63aa 100644
  	if (debug_boot_arg) {
  		patch_low_glo();
 diff --git a/osfmk/arm64/sleh.c b/osfmk/arm64/sleh.c
-index 2cc442e..044554b 100644
+index 0554aa80..8bf3a043 100644
 --- a/osfmk/arm64/sleh.c
 +++ b/osfmk/arm64/sleh.c
 @@ -1,3 +1,4 @@
 +#include <kern/boot_progress.h>
  /*
-  * Copyright (c) 2012-2020 Apple Inc. All rights reserved.
+  * Copyright (c) 2012-2023 Apple Inc. All rights reserved.
   *
-@@ -1066,6 +1067,7 @@ handle_breakpoint(arm_saved_state_t *state, uint32_t esr __unused)
+@@ -1512,6 +1513,7 @@ handle_user_breakpoint(arm_saved_state_t *state, uint64_t esr __unused)
  	mach_exception_data_type_t codes[2]  = {EXC_ARM_BREAKPOINT};
  	mach_msg_type_number_t     numcodes  = 2;
  
 +	boot_progress_user_breakpoint(state, esr);
- #if __has_feature(ptrauth_calls)
- 	if (ESR_EC(esr) == ESR_EC_BRK_AARCH64 &&
- 	    brk_comment_is_ptrauth(ISS_BRK_COMMENT(esr))) {
-@@ -1508,6 +1510,7 @@ static void
- handle_kernel_abort(arm_saved_state_t *state, uint32_t esr, vm_offset_t fault_addr,
-     fault_status_t fault_code, vm_prot_t fault_type, expected_fault_handler_t expected_fault_handler)
- {
-+	boot_progress_user_abort(state, esr, fault_addr);
- 	thread_t thread = current_thread();
- 	bool recover = find_copyio_recovery_entry(state) != 0;
+ 	if (ESR_EC(esr) == ESR_EC_BRK_AARCH64) {
+ 		/*
+ 		 * Consult the trap labels we know about to decide whether userspace
+@@ -2079,6 +2081,7 @@ handle_user_abort(arm_saved_state_t *state, uint64_t esr, vm_offset_t fault_addr
+ 	}
+ #endif /* __has_feature(ptrauth_calls) */
  
-@@ -1853,6 +1856,7 @@ sleh_irq(arm_saved_state_t *state)
++	boot_progress_user_abort(state, esr, fault_addr);
+ 	const self_restrict_mode_t self_restrict_mode = user_fault_in_self_restrict_mode(thread);
+ 	if ((self_restrict_mode != SELF_RESTRICT_NONE) &&
+ 	    task_is_jit_exception_fatal(get_threadtask(thread))) {
+@@ -3009,6 +3012,7 @@ sleh_irq(arm_saved_state_t *state)
  
  
  	sleh_interrupt_handler_prologue(state, DBG_INTR_TYPE_OTHER);
@@ -222,7 +222,7 @@ index 2cc442e..044554b 100644
  #if USE_APPLEARMSMP
  	PE_handle_ext_interrupt();
 diff --git a/osfmk/console/serial_console.c b/osfmk/console/serial_console.c
-index e5b23f2..8334edc 100644
+index 7784e725..3a49734c 100644
 --- a/osfmk/console/serial_console.c
 +++ b/osfmk/console/serial_console.c
 @@ -1,3 +1,4 @@
@@ -230,7 +230,7 @@ index e5b23f2..8334edc 100644
  /*
   * Copyright (c) 2000-2020 Apple, Inc. All rights reserved.
   *
-@@ -245,6 +246,7 @@ get_cons_ops_index(void)
+@@ -251,6 +252,7 @@ get_cons_ops_index(void)
  static inline void
  _cnputc(char c, bool poll)
  {
@@ -239,7 +239,7 @@ index e5b23f2..8334edc 100644
  	const uint32_t idx = get_cons_ops_index();
  
 diff --git a/osfmk/console/video_console.c b/osfmk/console/video_console.c
-index 384118e..a396efd 100644
+index 648cb704..15b59643 100644
 --- a/osfmk/console/video_console.c
 +++ b/osfmk/console/video_console.c
 @@ -1,3 +1,4 @@
@@ -255,7 +255,7 @@ index 384118e..a396efd 100644
  	if (gc_initialized && gc_enabled) {
  		VCPUTC_LOCK_LOCK();
  		if (gc_enabled) {
-@@ -2891,6 +2893,9 @@ initialize_screen(PE_Video * boot_vinfo, unsigned int op)
+@@ -2896,6 +2898,9 @@ initialize_screen(PE_Video * boot_vinfo, unsigned int op)
  			vinfo = new_vinfo;
  		}
  
@@ -265,7 +265,7 @@ index 384118e..a396efd 100644
  		// If we changed the virtual address, remove the old mapping
  		if (newVideoVirt != 0) {
  			if (lastVideoVirt && lastVideoMapSize) {                                                /* Was the framebuffer mapped before? */
-@@ -3043,6 +3048,10 @@ initialize_screen(PE_Video * boot_vinfo, unsigned int op)
+@@ -3048,6 +3053,10 @@ initialize_screen(PE_Video * boot_vinfo, unsigned int op)
  	}
  #endif
  	}
@@ -277,20 +277,20 @@ index 384118e..a396efd 100644
  
  void vcattach(void); /* XXX gcc 4 warning cleanup */
 diff --git a/osfmk/kern/Makefile b/osfmk/kern/Makefile
-index 7aa2a65..de8008d 100644
+index 1c856dd0..f295db69 100644
 --- a/osfmk/kern/Makefile
 +++ b/osfmk/kern/Makefile
-@@ -113,6 +113,7 @@ PRIVATE_EXPORT_FILES = \
+@@ -138,6 +138,7 @@ PRIVATE_EXPORT_FILES = \
  
  
  XNU_ONLY_EXPORTS = \
 +	boot_progress.h \
  	arcade.h \
  	btlog.h \
- 	cpu_quiesce.h \
+ 	cpc.h \
 diff --git a/osfmk/kern/boot_progress.h b/osfmk/kern/boot_progress.h
 new file mode 100644
-index 0000000..92f70b4
+index 00000000..92f70b4a
 --- /dev/null
 +++ b/osfmk/kern/boot_progress.h
 @@ -0,0 +1,34 @@
@@ -329,7 +329,7 @@ index 0000000..92f70b4
 +#endif
 +#endif
 diff --git a/osfmk/kern/startup.c b/osfmk/kern/startup.c
-index b790d0d..287afb9 100644
+index c977c983..0125a33c 100644
 --- a/osfmk/kern/startup.c
 +++ b/osfmk/kern/startup.c
 @@ -1,3 +1,4 @@
@@ -337,7 +337,7 @@ index b790d0d..287afb9 100644
  /*
   * Copyright (c) 2000-2020 Apple Inc. All rights reserved.
   *
-@@ -221,6 +222,7 @@ TUNABLE(startup_debug_t, startup_debug, "startup_debug", 0);
+@@ -222,6 +223,7 @@ TUNABLE(int, serverperfmode, "serverperfmode", 0);
  static inline void
  kernel_bootstrap_log(const char *message)
  {
@@ -345,7 +345,7 @@ index b790d0d..287afb9 100644
  	if ((startup_debug & STARTUP_DEBUG_VERBOSE) &&
  	    startup_phase >= STARTUP_SUB_KPRINTF) {
  		kprintf("kernel_bootstrap: %s\n", message);
-@@ -231,6 +233,7 @@ kernel_bootstrap_log(const char *message)
+@@ -232,6 +234,7 @@ kernel_bootstrap_log(const char *message)
  static inline void
  kernel_bootstrap_thread_log(const char *message)
  {
@@ -353,7 +353,7 @@ index b790d0d..287afb9 100644
  	if ((startup_debug & STARTUP_DEBUG_VERBOSE) &&
  	    startup_phase >= STARTUP_SUB_KPRINTF) {
  		kprintf("kernel_bootstrap_thread: %s\n", message);
-@@ -642,6 +645,7 @@ kernel_bootstrap_thread(void)
+@@ -754,6 +757,7 @@ kernel_bootstrap_thread(void)
  	 */
  	kernel_bootstrap_thread_log("clock_service_create");
  	clock_service_create();
@@ -362,7 +362,7 @@ index b790d0d..287afb9 100644
  	/*
  	 *	Create the device service.
 diff --git a/pexpert/arm/pe_kprintf.c b/pexpert/arm/pe_kprintf.c
-index 65144c7..3c440ec 100644
+index 7a4bbd39..fea9411c 100644
 --- a/pexpert/arm/pe_kprintf.c
 +++ b/pexpert/arm/pe_kprintf.c
 @@ -1,3 +1,4 @@
@@ -370,7 +370,7 @@ index 65144c7..3c440ec 100644
  /*
   * Copyright (c) 2000-2019 Apple Inc. All rights reserved.
   */
-@@ -58,6 +59,7 @@ __startup_func
+@@ -61,6 +62,7 @@ __startup_func
  static void
  PE_init_kprintf(void)
  {
