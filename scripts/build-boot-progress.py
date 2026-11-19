@@ -138,11 +138,21 @@ boot_progress_bind(uintptr_t framebuffer, unsigned width, unsigned height,
 }
 
 void
-boot_progress_init(void)
+boot_progress_init(boot_args *args)
 {
-	/* The framebuffer is bound separately, once the boot arguments are parsed. */
+	/* Bind straight from boot_args.Video: initialize_screen() may never be
+	 * reached on the bare-metal loader route, so waiting for it to bind
+	 * would leave the diagnostic permanently unreachable. The loader filled
+	 * Video before jumping into XNU (loader.c: ba->Video.*). */
 	memset(ring, 0, sizeof(ring));
 	ring_at = 0;
+	if (args != 0 && args->Video.v_baseAddr != 0 && args->Video.v_width != 0) {
+		boot_progress_bind((uintptr_t)args->Video.v_baseAddr,
+		    args->Video.v_width, args->Video.v_height,
+		    args->Video.v_rowBytes, args->Video.v_depth);
+		boot_progress_start();
+		boot_progress_stage("arm_init: bound from boot_args");
+	}
 }
 
 int
